@@ -1,0 +1,98 @@
+Wind Fantasy KR Steam Patch Launcher
+제3자 구성 요소 고지
+====================================
+
+이 문서는 standalone Windows 실행 파일에 포함될 수 있는 제3자 런타임
+구성 요소와, 소스에서 실행 파일을 다시 빌드할 때만 사용될 수 있는 개발/빌드
+도구를 구분해 정리합니다.
+
+프로젝트 범위
+-------------
+
+이 런처와 패치 보조 코드는 Team-JHF가 작성/관리하는 비공식 도구입니다.
+
+이 도구의 배포는 원본 게임에 대한 권리 주장, 사용 허가, 공식 지원 또는
+원 권리자와의 제휴를 의미하지 않습니다.
+
+Wind Fantasy, 원본 실행 파일, 원본 데이터, 이미지, 음악, 상표 및 관련
+저작물은 각 원 권리자의 자산입니다. 본 도구는 원본 게임 파일을 대체하거나
+원본 저작물을 재배포하기 위한 목적으로 제공되지 않습니다.
+
+
+배포 실행 파일에 포함될 수 있는 런타임 구성 요소
+---------------------------------------------------
+
+standalone 실행 파일은 PyInstaller로 빌드됩니다. 빌드 환경 및 포함된 기능에
+따라 다음 제3자 런타임 구성 요소를 포함할 수 있습니다.
+
+- Python 3.12 runtime and standard library:
+  Python Software Foundation License Version 2
+
+- Tcl/Tk 8.6:
+  Tcl/Tk License
+
+- PyInstaller bootloader:
+  GPL-2.0-or-later WITH Bootloader-exception
+
+- OpenSSL 3 libcrypto/libssl:
+  Apache License 2.0 (SPDX: Apache-2.0)
+
+- zlib:
+  zlib License
+
+- bzip2/libbz2:
+  bzip2/libbzip2 License
+
+- liblzma:
+  현재 패키징 환경의 XZ Utils 빌드 기준 BSD Zero Clause License (0BSD).
+  이전 XZ/liblzma 릴리스는 public-domain 조건을 사용할 수 있습니다.
+
+- libffi:
+  MIT License
+
+- Microsoft Visual C/C++ Runtime 및 UCRT:
+  Microsoft 런타임 재배포 조건
+
+
+소스 빌드에 사용될 수 있는 개발/빌드 도구
+-----------------------------------------
+
+아래 항목은 소스에서 실행 파일을 다시 빌드할 때 사용될 수 있는 도구입니다.
+대체로 빌드 시점 의존성이므로, standalone 실행 파일의 런타임 포함물과
+분리해서 고지합니다.
+
+- PyInstaller:
+  GPL-2.0-or-later. 생성된 실행 파일에 포함되는 bootloader에는
+  PyInstaller bootloader exception이 적용됩니다.
+
+- altgraph:
+  MIT License
+
+- pefile:
+  MIT License
+
+- pywin32-ctypes:
+  BSD-3-Clause License
+
+- pyinstaller-hooks-contrib:
+  패키지 메타데이터에 Apache Software License 또는 GPLv2 계열 고지 항목이
+  포함될 수 있습니다.
+
+
+참고 링크
+---------
+
+- Python license:
+  https://docs.python.org/3/license.html
+
+- PyInstaller license:
+  https://pyinstaller.org/en/stable/license.html
+
+- OpenSSL license:
+  https://www.openssl.org/source/license.html
+
+- XZ Utils licensing:
+  https://tukaani.org/xz/#_licensing
+
+이 고지는 런처 패키지의 표시와 라이선스 경계를 명확히 하기 위한 것입니다.
+원본 게임 또는 원본 게임 리소스에 대한 권리를 부여하지 않습니다.

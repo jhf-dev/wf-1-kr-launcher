@@ -10,14 +10,22 @@ Steam/TW data.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import dataclasses
 import hashlib
 import json
+import os
+import re
 import shutil
 import struct
 import subprocess
 import sys
 from pathlib import Path
+
+try:
+    import winreg
+except ImportError:  # pragma: no cover - non-Windows developer host
+    winreg = None
 
 
 KR_DEFAULT = Path(r"C:\Users\early\Downloads\DGGL\Games\WFTact_Win95_230101\Store\WFantasy")
@@ -52,6 +60,21 @@ PACK_CHECK_FILES = [
 TARGET_EXECUTABLES = [
     "WFantasy_win10.exe",
     "WindConfig.exe",
+]
+
+STEAM_GAME_DIR_NAMES = [
+    "Wind Fantasy",
+]
+
+STANDARD_4_3_RESOLUTIONS = [
+    (640, 480),
+    (800, 600),
+    (1024, 768),
+    (1152, 864),
+    (1280, 960),
+    (1400, 1050),
+    (1600, 1200),
+    (1920, 1440),
 ]
 
 DDRAW_RUNTIME_FILES = ("ddraw.dll", "wfantasy_ddraw.ini")
@@ -150,6 +173,93 @@ def read_state(tw_root: Path) -> dict[str, object] | None:
     except json.JSONDecodeError:
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def has_target_layout(tw_root: Path) -> bool:
+    return all(find_case_insensitive(tw_root, name) is not None for name in TARGET_EXECUTABLES)
+
+
+def _dedupe_paths(paths: list[Path]) -> list[Path]:
+    result: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        try:
+            key = str(path.expanduser().resolve()).lower()
+        except OSError:
+            key = str(path.expanduser().absolute()).lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(path)
+    return result
+
+
+def steam_roots_from_registry() -> list[Path]:
+    if winreg is None:
+        return []
+
+    locations = [
+        (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", ("SteamPath", "InstallPath")),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", ("InstallPath", "SteamPath")),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", ("InstallPath", "SteamPath")),
+    ]
+    roots: list[Path] = []
+    for hive, key_name, value_names in locations:
+        try:
+            with winreg.OpenKey(hive, key_name) as key:
+                for value_name in value_names:
+                    try:
+                        value, _value_type = winreg.QueryValueEx(key, value_name)
+                    except OSError:
+                        continue
+                    if isinstance(value, str) and value.strip():
+                        roots.append(Path(value.replace("/", "\\")))
+        except OSError:
+            continue
+    return _dedupe_paths(roots)
+
+
+def default_steam_roots() -> list[Path]:
+    roots = steam_roots_from_registry()
+    for env_name in ("ProgramFiles(x86)", "ProgramFiles"):
+        value = os.environ.get(env_name)
+        if value:
+            roots.append(Path(value) / "Steam")
+    return _dedupe_paths(roots)
+
+
+_VDF_PATH_RE = re.compile(r'"path"\s*"((?:\\.|[^"\\])*)"')
+
+
+def _unescape_vdf_string(value: str) -> str:
+    return value.replace(r"\\", "\\").replace(r"\"", '"')
+
+
+def steam_library_roots(steam_root: Path) -> list[Path]:
+    roots = [steam_root]
+    libraryfolders = steam_root / "steamapps" / "libraryfolders.vdf"
+    if libraryfolders.exists():
+        text = libraryfolders.read_text(encoding="utf-8", errors="replace")
+        for match in _VDF_PATH_RE.finditer(text):
+            roots.append(Path(_unescape_vdf_string(match.group(1))))
+    return _dedupe_paths(roots)
+
+
+def candidate_wf1_roots(steam_root: Path) -> list[Path]:
+    candidates: list[Path] = []
+    if has_target_layout(steam_root):
+        candidates.append(steam_root)
+    for library_root in steam_library_roots(steam_root):
+        for dirname in STEAM_GAME_DIR_NAMES:
+            candidates.append(library_root / "steamapps" / "common" / dirname)
+    return _dedupe_paths(candidates)
+
+
+def detect_steam_wf1_root(steam_roots: list[Path] | None = None) -> Path | None:
+    for steam_root in steam_roots if steam_roots is not None else default_steam_roots():
+        for candidate in candidate_wf1_roots(steam_root):
+            if has_target_layout(candidate):
+                return candidate.resolve()
+    return None
 
 
 def file_status(kr_root: Path, tw_root: Path, relative_path: str) -> FileStatus:
@@ -280,6 +390,47 @@ def backup_file_once(tw_root: Path, relative_path: str) -> None:
     shutil.copy2(src, dst)
 
 
+def current_monitor_size() -> tuple[int, int]:
+    try:
+        user32 = ctypes.windll.user32
+        return int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1))
+    except Exception:
+        return (640, 480)
+
+
+def available_4_3_resolutions(
+    max_width: int | None = None,
+    max_height: int | None = None,
+) -> list[tuple[int, int]]:
+    if max_width is None or max_height is None:
+        max_width, max_height = current_monitor_size()
+    available = [
+        (width, height)
+        for width, height in STANDARD_4_3_RESOLUTIONS
+        if width <= max_width and height <= max_height
+    ]
+    return available or [(640, 480)]
+
+
+def default_4_3_resolution(
+    max_width: int | None = None,
+    max_height: int | None = None,
+) -> tuple[int, int]:
+    available = available_4_3_resolutions(max_width, max_height)
+    return (1280, 960) if (1280, 960) in available else available[-1]
+
+
+def resolution_label(resolution: tuple[int, int]) -> str:
+    return f"{resolution[0]} x {resolution[1]}"
+
+
+def parse_resolution_label(value: str) -> tuple[int, int]:
+    parts = value.lower().replace(" ", "").split("x", 1)
+    if len(parts) != 2:
+        raise ValueError(f"unsupported resolution preset: {value}")
+    return int(parts[0]), int(parts[1])
+
+
 def normalize_display_config(
     display_mode: str | None,
     width: int | None,
@@ -293,8 +444,10 @@ def normalize_display_config(
         raise SystemExit(f"unsupported display mode: {display_mode}")
 
     if display_mode == "windowed":
-        width = 1280 if width is None else width
-        height = 960 if height is None else height
+        if width is None and height is None:
+            width, height = default_4_3_resolution()
+        elif width is None or height is None:
+            raise SystemExit("windowed mode requires both --width and --height")
         if width <= 0 or height <= 0 or width * 3 != height * 4:
             raise SystemExit("windowed display size must be a positive 4:3 resolution")
     else:
@@ -413,6 +566,7 @@ def install_directdraw_runtime(
     width: int | None,
     height: int | None,
     dry_run: bool,
+    install_when_unspecified: bool = True,
 ) -> dict[str, object]:
     payload = ddraw_payload_path()
     if not payload.exists():
@@ -420,6 +574,17 @@ def install_directdraw_runtime(
             f"DirectDraw/CP949 runtime payload is missing: {payload}. "
             "Build it with tooling\\build_ddraw_proxy.py before applying the patch."
         )
+    if not install_when_unspecified and display_mode is None and width is None and height is None:
+        return {
+            "changed": False,
+            "supported": True,
+            "dry_run": dry_run,
+            "payload": str(payload),
+            "config": None,
+            "files": [],
+            "skipped": True,
+            "reason": "display runtime unchanged",
+        }
 
     config = normalize_display_config(display_mode, width, height)
     dll_data = payload.read_bytes()
@@ -635,6 +800,65 @@ def restore_patch(args: argparse.Namespace) -> dict[str, object]:
     return report
 
 
+def launch_executable(args: argparse.Namespace, executable_name: str, action: str) -> dict[str, object]:
+    tw_root = args.tw_root.resolve()
+    ensure_target_layout(tw_root)
+    exe = target_path(tw_root, executable_name)
+    if not exe.exists():
+        raise SystemExit(f"{executable_name} not found: {exe}")
+
+    if not getattr(args, "no_apply", False):
+        apply_report = apply_patch(args)
+        runtime_report = apply_report.get("directdraw_runtime", {"changed": False})
+    else:
+        if not args.dry_run:
+            ensure_not_running()
+        runtime_report = install_directdraw_runtime(
+            tw_root,
+            getattr(args, "display_mode", None),
+            getattr(args, "width", None),
+            getattr(args, "height", None),
+            dry_run=args.dry_run,
+            install_when_unspecified=False,
+        )
+        apply_report = {"skipped": True}
+        if runtime_report.get("changed") and not args.dry_run:
+            write_state(
+                tw_root,
+                {
+                    "action": "directdraw_runtime",
+                    "dry_run": False,
+                    "tw_root": str(tw_root),
+                    "directdraw_runtime": runtime_report,
+                },
+            )
+
+    if args.dry_run:
+        return {
+            "action": action,
+            "dry_run": True,
+            "would_run": str(exe),
+            "apply": apply_report,
+            "directdraw_runtime": runtime_report,
+        }
+
+    subprocess.Popen([str(exe)], cwd=str(tw_root))
+    return {
+        "action": action,
+        "launched": str(exe),
+        "apply": apply_report,
+        "directdraw_runtime": runtime_report,
+    }
+
+
+def launch(args: argparse.Namespace) -> dict[str, object]:
+    return launch_executable(args, "WindConfig.exe", "launch")
+
+
+def launch_win10(args: argparse.Namespace) -> dict[str, object]:
+    return launch_executable(args, "WFantasy_win10.exe", "launch_win10")
+
+
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--kr-root", type=Path, default=KR_DEFAULT)
     parser.add_argument("--tw-root", type=Path, default=TW_DEFAULT)
@@ -661,6 +885,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p_restore = sub.add_parser("restore", help="restore files from backup")
     add_common_args(p_restore)
 
+    p_launch = sub.add_parser("launch", help="apply if needed, then start WindConfig.exe")
+    add_common_args(p_launch)
+    p_launch.add_argument("--no-apply", action="store_true", help="launch without applying files first")
+
+    p_launch_win10 = sub.add_parser("launch-win10", help="apply if needed, then start WFantasy_win10.exe directly")
+    add_common_args(p_launch_win10)
+    p_launch_win10.add_argument("--no-apply", action="store_true", help="launch without applying files first")
+
     return parser.parse_args(argv)
 
 
@@ -672,6 +904,10 @@ def main(argv: list[str] | None = None) -> int:
         report = apply_patch(args)
     elif args.command == "restore":
         report = restore_patch(args)
+    elif args.command == "launch":
+        report = launch(args)
+    elif args.command == "launch-win10":
+        report = launch_win10(args)
     else:  # pragma: no cover
         raise SystemExit(f"unknown command: {args.command}")
     print(json.dumps(report, ensure_ascii=False, indent=2))

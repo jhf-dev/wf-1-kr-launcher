@@ -5,6 +5,14 @@
 !README.md
 !README_WF1_KR_STEAM_PATCH.txt
 !THIRD_PARTY_NOTICES.txt
+!WF1_KR_Steam_Patch_GUI.cmd
+!WF1_KR_Steam_Patch_GUI.spec
+!WF1_KR_Steam_Patch_GUI.exe
+
+!assets/
+assets/*
+!assets/launcher_art.png
+!assets/launcher_art.gif
 
 !analysis/
 analysis/*

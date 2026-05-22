@@ -517,15 +517,56 @@ Visual smoke results from the real Steam folder:
 After capture, the live game process was stopped. The real Steam folder remains
 patched so the user can launch and continue manual play testing.
 
+## GUI Launcher and Package
+
+The patch flow now has a standalone Tk GUI launcher matching the SP launcher
+shape:
+
+- `tooling/wfantasy_steam_kr_patch_gui.py` provides the GUI.
+- `WF1_KR_Steam_Patch_GUI.exe` is the root standalone build.
+- `WF1_KR_Steam_Patch_GUI.cmd` is a convenience wrapper.
+- `WF1_KR_Steam_Patch_GUI.spec` is the PyInstaller build recipe.
+- `assets/launcher_art.gif` is bundled into the frozen executable.
+- `dist\WF1_KR_Steam_Patch\` is the local package folder.
+- `dist\WF1_KR_Steam_Patch.zip` is the local distributable zip.
+
+Launcher behavior:
+
+- Korean source path starts blank and must be selected by the user.
+- Steam/TW path is auto-detected from Steam registry/libraryfolders when
+  possible.
+- `패치 적용`, `상태 확인`, `TW 원본 복구`, `게임 실행`, and `WindConfig 실행`
+  are available from the first screen.
+- `게임 실행` starts `WFantasy_win10.exe` directly.
+- `WindConfig 실행` starts `WindConfig.exe`.
+- Display options are `건드리지 않음`, `창모드`, `전체 창 모드`, and
+  `전체화면`.
+
+Verification after packaging:
+
+- `python -m py_compile tooling\wfantasy_steam_kr_launcher.py tooling\wfantasy_steam_kr_patch_gui.py tooling\build_ddraw_proxy.py`
+- `python -m unittest discover -s tests`
+- `python -m PyInstaller --noconfirm --clean WF1_KR_Steam_Patch_GUI.spec`
+- root `WF1_KR_Steam_Patch_GUI.exe --self-test`
+- package folder `dist\WF1_KR_Steam_Patch\WF1_KR_Steam_Patch_GUI.exe --self-test`
+- clean-temp zip extraction self-test
+- live restore/apply smoke:
+  - `restore` restored four Steam/TW overlay files.
+  - `restore` removed launcher-created `ddraw.dll` and `wfantasy_ddraw.ini`.
+  - `apply --display-mode windowed --width 1280 --height 960` reapplied four
+    KR overlay files and the runtime payload.
+  - final root `ddraw.dll` SHA-256 matches `payload\ddraw.dll`:
+    `E328371C3CC695FBDC6EC3B4C869CD00B9EF6672B65A8F585F130FF759B69B0B`.
+  - final `wfantasy_ddraw.ini` uses `mode=windowed`, `width=1280`,
+    `height=960`, `text_cp949=1`, `font_charset=preserve`, and blank
+    `font_face`.
+
+The real Steam folder remains patched with the package payload so the user can
+continue manual play testing.
+
 ## Next Safe Step
 
-The real Steam folder is currently patched. The next safety check is either a
-manual play test through `WindConfig.exe`/Steam, or a reversible restore smoke if
-we need to prove uninstall behavior on the live folder.
-
-The next implementation step should be:
-
-- apply to the real Steam folder only when ready to change live files
-- smoke `status -> apply -> status -> restore -> status` on the real folder if
-  a reversible live test is needed
-- add GUI/package work only after the CLI runtime path is stable
+The next meaningful check is user-visible manual play testing through the new
+GUI launcher, especially `게임 실행` and `WindConfig 실행` from the packaged
+zip. Any further runtime changes should stay in small one-variable experiments
+so visual/font differences remain attributable.
