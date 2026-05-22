@@ -3,7 +3,9 @@
 ## 레포 고정 사항
 
 - 이 레포의 기본 Git 계정은 `jhf-dev <285839567+jhf-dev@users.noreply.github.com>`로 둡니다.
-- 원격 저장소는 `https://github.com/jhf-dev/wf-1-kr-launcher.git`를 기준으로 합니다.
+- 원격 저장소는 `https://jhf-dev@github.com/jhf-dev/wf-1-kr-launcher.git`를 기준으로 합니다.
+- GitHub 인증 계정 선택창이 뜨지 않도록 repo-local `credential.username`과
+  `credential.https://github.com.username`은 `jhf-dev`로 고정합니다.
 - Steam 설치 폴더의 원본 게임 데이터와 실행 파일은 기본적으로 커밋하지 않습니다. 문서, 분석 기록, 툴링, 테스트만 추적 대상으로 둡니다.
 
 ## 페르소나

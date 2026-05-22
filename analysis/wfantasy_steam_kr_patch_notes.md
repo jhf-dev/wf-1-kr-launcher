@@ -342,14 +342,18 @@ SP tooling installs runtime support files:
 - `ddraw.dll`
 - `wftsp_ddraw.ini`
 
-WF1 currently has neither a WF1-specific DirectDraw proxy nor a WF1 display
-config file.
+WF1 now has a separate runtime pair:
+
+- `payload/ddraw.dll`
+- `wfantasy_ddraw.ini`
 
 Impact:
 
-- Do not copy SP `payload/ddraw.dll` or `wftsp_ddraw.ini` into WF1.
-- If WF1 later needs display/windowing fixes, implement and verify a separate
-  WF1 proxy with WF1 process names and WF1 rendering behavior.
+- Do not copy SP `wftsp_ddraw.ini` into WF1.
+- Keep WF1 runtime config/log names separate from SP:
+  `wfantasy_ddraw.ini` and `wfantasy_ddraw.log`.
+- The runtime keeps the DirectDraw scaling/offscreen RGB565 fix and adds WF1
+  text hooks for CP949.
 
 ## Runtime Smoke Verification
 
@@ -382,8 +386,9 @@ Smoke-only WF1 canary:
 - After applying the WF1 KR overlay (`game.ini`, `bmp`, `man`, `stage`), the
   title resource changed to `WIND FANTASY TACTICS` and rendered with normal
   colors.
-- Menu/save-slot navigation reached an in-game UI screen and Korean empty-slot
-  text rendered visibly in the windowed proxy path.
+- Menu/save-slot navigation reached an in-game UI screen. This earlier borrowed
+  SP proxy smoke proved the screen path, but the visible slot text was still
+  decoded as Chinese-codepage glyphs, not correct Korean.
 
 Interpretation:
 
@@ -393,21 +398,78 @@ Interpretation:
   TW original data, so it is not KR-data-specific.
 - Strong hypothesis: WF1 has the same DirectDraw 16bpp/offscreen-surface
   sensitivity as SP when a windowed proxy is used.
-- Remaining risk: the borrowed SP proxy is only a smoke canary. A distributable
-  WF1 proxy should be split into WF1-named config/log files and retested before
-  being included in a WF1 package.
+- Resolved follow-up: the borrowed SP proxy was split into WF1-named runtime
+  files and extended with CP949 text hooks.
+
+## CP949 Text Runtime
+
+Implemented after the smoke test showed CP949 bytes being interpreted as a
+Chinese codepage in the save/load slot UI.
+
+Runtime behavior:
+
+- Local `ddraw.dll` is loaded by the Steam `WFantasy_win10.exe` import table.
+- The proxy patches the main executable imports for:
+  - `GDI32!TextOutA`
+  - `GDI32!CreateFontA`
+  - `KERNEL32!MultiByteToWideChar`
+  - `KERNEL32!WideCharToMultiByte`
+  - `KERNEL32!GetACP`
+- `TextOutA` calls are converted from CP949 bytes to Unicode and then rendered
+  through `TextOutW`, preserving the caller's `nCount`.
+- `CreateFontA` is forced to `HANGEUL_CHARSET`, with `Gulim` as fallback for
+  Chinese/Japanese/default charset requests.
+- ACP, CP936, and CP950 conversion requests are mapped to CP949 while
+  `text_cp949=1`.
+
+Runtime files:
+
+- `payload/ddraw.dll`
+- target `ddraw.dll`
+- target `wfantasy_ddraw.ini`
+
+Default generated config:
+
+```ini
+[wfantasy_ddraw]
+mode=fullscreen
+width=640
+height=480
+debug=0
+input_fix=1
+audio_focus_fix=1
+inactive_window_spoof=1
+text_cp949=1
+```
+
+Windowed smoke verification:
+
+- Fresh smoke root:
+  `C:\Users\early\AppData\Local\Temp\wf1-cp949-smoke-20260522-102744`
+- Applied with:
+  `--display-mode windowed --width 1280 --height 960`
+- Built payload SHA-256:
+  `68586A39FD4E4F87D7C3CF67A6B687888A4A114505845EA117C061B69ECE7642`
+- Visual result:
+  save/load slot text that previously appeared as Chinese glyphs now renders as
+  Korean, including repeated `빈 / 공 / 간` slot labels.
+
+Real Steam folder state after this check:
+
+- no root `ddraw.dll`
+- no root `wfantasy_ddraw.ini`
+- no `_wfantasy_kr_patch_backup`
+- no running WF1 processes
 
 ## Next Safe Step
 
-The real Steam folder has not been modified yet. Apply to the real Steam folder
-only after deciding whether this WF1 launcher should remain data-only or should
-also carry a WF1-specific DirectDraw proxy.
+The real Steam folder has not been modified yet. Applying the patch to the real
+Steam folder will now install both the KR data overlay and the WF1 CP949
+DirectDraw runtime.
 
 The next implementation step should be:
 
-- keep the current data overlay list to `game.ini`, `bmp`, `man`, and `stage`
-- preserve Steam executables
-- keep compatibility files as checks, not copied payload
-- if packaging display support, port the SP DirectDraw proxy as WF1-specific
-  runtime code rather than copying `wftsp_ddraw.ini` names unchanged
-- initialize/push the tooling repo under `jhf-dev/wf-1-kr-launcher`
+- apply to the real Steam folder only when ready to change live files
+- smoke `status -> apply -> status -> restore -> status` on the real folder if
+  a reversible live test is needed
+- add GUI/package work only after the CLI runtime path is stable

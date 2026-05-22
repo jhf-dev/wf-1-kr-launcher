@@ -72,9 +72,36 @@ class LauncherTests(unittest.TestCase):
         self.assertFalse(report["dry_run"])
         self.assertEqual((self.tw / "stage").read_bytes(), (self.kr / "STAGE").read_bytes())
         self.assertTrue((self.tw / launcher.BACKUP_DIR_NAME / "stage").exists())
+        self.assertEqual((launcher.ddraw_payload_path()).read_bytes(), (self.tw / "ddraw.dll").read_bytes())
+        self.assertIn("text_cp949=1", (self.tw / "wfantasy_ddraw.ini").read_text(encoding="ascii"))
 
         launcher.restore_patch(args)
         self.assertNotEqual((self.tw / "stage").read_bytes(), (self.kr / "STAGE").read_bytes())
+        self.assertFalse((self.tw / "ddraw.dll").exists())
+        self.assertFalse((self.tw / "wfantasy_ddraw.ini").exists())
+
+    def test_windowed_runtime_config_is_4_by_3_and_cp949_enabled(self) -> None:
+        config = launcher.normalize_display_config("windowed", 1280, 960)
+        rendered = launcher.render_ddraw_config(config).decode("ascii")
+
+        self.assertEqual("windowed", config["mode"])
+        self.assertIn("[wfantasy_ddraw]", rendered)
+        self.assertIn("width=1280", rendered)
+        self.assertIn("height=960", rendered)
+        self.assertIn("text_cp949=1", rendered)
+
+    def test_directdraw_proxy_contains_cp949_text_hooks(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "tooling" / "runtime" / "ddraw_proxy.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Hook_TextOutA", source)
+        self.assertIn("Hook_CreateFontA", source)
+        self.assertIn("Hook_MultiByteToWideChar", source)
+        self.assertIn("Hook_WideCharToMultiByte", source)
+        self.assertIn("Hook_GetACP", source)
+        self.assertIn("HANGEUL_CHARSET", source)
+        self.assertIn("effective_text_code_page", source)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ tooling/runtime/*
 
 !payload/
 payload/*
+!payload/ddraw.dll
 
 !tests/
 tests/*

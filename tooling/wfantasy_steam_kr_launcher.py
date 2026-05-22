@@ -54,6 +54,9 @@ TARGET_EXECUTABLES = [
     "WindConfig.exe",
 ]
 
+DDRAW_RUNTIME_FILES = ("ddraw.dll", "wfantasy_ddraw.ini")
+DDRAW_CONFIG_SECTION = "wfantasy_ddraw"
+
 PROCESS_NAMES = {
     "WFantasy",
     "WFantasy_win10",
@@ -90,6 +93,20 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest().upper()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest().upper()
+
+
+def repo_root_from_script() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+
+def ddraw_payload_path() -> Path:
+    return repo_root_from_script() / "payload" / "ddraw.dll"
 
 
 def find_case_insensitive(root: Path, relative_path: str) -> Path | None:
@@ -252,6 +269,145 @@ def backup_file_once(tw_root: Path, relative_path: str) -> None:
     shutil.copy2(src, dst)
 
 
+def normalize_display_config(
+    display_mode: str | None,
+    width: int | None,
+    height: int | None,
+) -> dict[str, int | str]:
+    if display_mode is None:
+        if width is not None or height is not None:
+            raise SystemExit("--width/--height require --display-mode")
+        display_mode = "fullscreen"
+    if display_mode not in {"fullscreen", "windowed", "borderless"}:
+        raise SystemExit(f"unsupported display mode: {display_mode}")
+
+    if display_mode == "windowed":
+        width = 1280 if width is None else width
+        height = 960 if height is None else height
+        if width <= 0 or height <= 0 or width * 3 != height * 4:
+            raise SystemExit("windowed display size must be a positive 4:3 resolution")
+    else:
+        if width is not None or height is not None:
+            raise SystemExit("--width/--height are only supported with --display-mode windowed")
+        width, height = 640, 480
+
+    return {
+        "mode": display_mode,
+        "width": width,
+        "height": height,
+        "debug": 0,
+        "input_fix": 1,
+        "audio_focus_fix": 1,
+        "inactive_window_spoof": 1,
+        "text_cp949": 1,
+    }
+
+
+def render_ddraw_config(config: dict[str, int | str]) -> bytes:
+    ordered_keys = [
+        "mode",
+        "width",
+        "height",
+        "debug",
+        "input_fix",
+        "audio_focus_fix",
+        "inactive_window_spoof",
+        "text_cp949",
+    ]
+    lines = [f"[{DDRAW_CONFIG_SECTION}]"]
+    lines.extend(f"{key}={config[key]}" for key in ordered_keys)
+    return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def read_ddraw_config(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="ascii", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("[") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def runtime_file_report(tw_root: Path, relative_path: str, desired_data: bytes, dry_run: bool) -> dict[str, object]:
+    target = target_path(tw_root, relative_path)
+    before_hash = sha256_file(target) if target.exists() else None
+    desired_hash = sha256_bytes(desired_data)
+    changed = before_hash != desired_hash
+    target_exists_before = target.exists()
+    if changed and not dry_run:
+        if target.exists():
+            backup_file_once(tw_root, relative_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(desired_data)
+    return {
+        "path": relative_path,
+        "changed": changed,
+        "target_exists_before": target_exists_before,
+        "target_sha256_before": before_hash,
+        "target_sha256_after": desired_hash if changed and not dry_run else before_hash,
+        "desired_sha256": desired_hash,
+        "size": len(desired_data),
+        "dry_run": dry_run,
+    }
+
+
+def install_directdraw_runtime(
+    tw_root: Path,
+    display_mode: str | None,
+    width: int | None,
+    height: int | None,
+    dry_run: bool,
+) -> dict[str, object]:
+    payload = ddraw_payload_path()
+    if not payload.exists():
+        raise SystemExit(
+            f"DirectDraw/CP949 runtime payload is missing: {payload}. "
+            "Build it with tooling\\build_ddraw_proxy.py before applying the patch."
+        )
+
+    config = normalize_display_config(display_mode, width, height)
+    dll_data = payload.read_bytes()
+    config_data = render_ddraw_config(config)
+    files = [
+        runtime_file_report(tw_root, "ddraw.dll", dll_data, dry_run),
+        runtime_file_report(tw_root, "wfantasy_ddraw.ini", config_data, dry_run),
+    ]
+    return {
+        "changed": any(bool(item["changed"]) for item in files),
+        "supported": True,
+        "dry_run": dry_run,
+        "payload": str(payload),
+        "config": config,
+        "files": files,
+    }
+
+
+def directdraw_runtime_status(tw_root: Path) -> dict[str, object]:
+    payload = ddraw_payload_path()
+    target_dll = target_path(tw_root, "ddraw.dll")
+    target_config = target_path(tw_root, "wfantasy_ddraw.ini")
+    payload_hash = sha256_file(payload) if payload.exists() else None
+    target_hash = sha256_file(target_dll) if target_dll.exists() else None
+    return {
+        "payload": str(payload),
+        "payload_exists": payload.exists(),
+        "payload_sha256": payload_hash,
+        "ddraw_dll": {
+            "exists": target_dll.exists(),
+            "sha256": target_hash,
+            "matches_payload": (payload_hash == target_hash) if payload_hash and target_hash else None,
+        },
+        "config": {
+            "exists": target_config.exists(),
+            "values": read_ddraw_config(target_config),
+        },
+    }
+
+
 def copy_overlay_file(kr_root: Path, tw_root: Path, relative_path: str, dry_run: bool) -> dict[str, object]:
     src = find_case_insensitive(kr_root, relative_path)
     if src is None:
@@ -301,6 +457,7 @@ def status(args: argparse.Namespace) -> dict[str, object]:
             dataclasses.asdict(file_status(kr_root, tw_root, name)) for name in COMPATIBILITY_CHECK_FILES
         ],
         "pack_status": [dataclasses.asdict(pack_status(kr_root, tw_root, name)) for name in PACK_CHECK_FILES],
+        "directdraw_runtime": directdraw_runtime_status(tw_root),
         "backup_dir_exists": (tw_root / BACKUP_DIR_NAME).exists(),
         "running_processes": running_processes(),
     }
@@ -319,12 +476,20 @@ def apply_patch(args: argparse.Namespace) -> dict[str, object]:
         raise SystemExit("archive structure check failed: " + json.dumps([dataclasses.asdict(x) for x in bad_packs]))
 
     copied = [copy_overlay_file(kr_root, tw_root, name, dry_run=args.dry_run) for name in KR_OVERLAY_FILES]
+    runtime_report = install_directdraw_runtime(
+        tw_root,
+        getattr(args, "display_mode", None),
+        getattr(args, "width", None),
+        getattr(args, "height", None),
+        dry_run=args.dry_run,
+    )
     report = {
         "action": "apply",
         "dry_run": args.dry_run,
         "kr_root": str(kr_root),
         "tw_root": str(tw_root),
         "copied": copied,
+        "directdraw_runtime": runtime_report,
         "compatible_files": [
             dataclasses.asdict(file_status(kr_root, tw_root, name)) for name in COMPATIBILITY_CHECK_FILES
         ],
@@ -347,6 +512,7 @@ def restore_patch(args: argparse.Namespace) -> dict[str, object]:
         raise SystemExit(f"backup directory does not exist: {backup_root}")
 
     restored: list[dict[str, object]] = []
+    restored_paths: set[str] = set()
     for backup in sorted(backup_root.rglob("*")):
         if not backup.is_file() or backup.name == STATE_FILE_NAME:
             continue
@@ -366,12 +532,50 @@ def restore_patch(args: argparse.Namespace) -> dict[str, object]:
                 "dry_run": args.dry_run,
             }
         )
+        restored_paths.add(relative_path.replace("\\", "/").lower())
+
+    removed_created_runtime: list[str] = []
+    skipped_created_runtime: list[dict[str, object]] = []
+    state_file = state_path(tw_root)
+    if state_file.exists():
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        runtime_report = state.get("directdraw_runtime") if isinstance(state, dict) else None
+        if isinstance(runtime_report, dict):
+            for item in runtime_report.get("files", []):
+                if not isinstance(item, dict):
+                    continue
+                relative_path = str(item.get("path", ""))
+                key = relative_path.replace("\\", "/").lower()
+                if relative_path not in DDRAW_RUNTIME_FILES or key in restored_paths:
+                    continue
+                if item.get("target_exists_before"):
+                    continue
+                target = target_path(tw_root, relative_path)
+                if not target.exists():
+                    continue
+                expected_hash = item.get("target_sha256_after") or item.get("desired_sha256")
+                current_hash = sha256_file(target)
+                if expected_hash and current_hash != expected_hash:
+                    skipped_created_runtime.append(
+                        {
+                            "path": relative_path,
+                            "reason": "current file differs from launcher-created runtime file",
+                            "current_sha256": current_hash,
+                            "expected_sha256": expected_hash,
+                        }
+                    )
+                    continue
+                if not args.dry_run:
+                    target.unlink()
+                removed_created_runtime.append(relative_path)
     report = {
         "action": "restore",
         "dry_run": args.dry_run,
         "tw_root": str(tw_root),
         "backup_dir": str(backup_root),
         "restored": restored,
+        "removed_created_runtime": sorted(removed_created_runtime),
+        "skipped_created_runtime": skipped_created_runtime,
     }
     if not args.dry_run:
         write_state(tw_root, report)
@@ -381,6 +585,13 @@ def restore_patch(args: argparse.Namespace) -> dict[str, object]:
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--kr-root", type=Path, default=KR_DEFAULT)
     parser.add_argument("--tw-root", type=Path, default=TW_DEFAULT)
+    parser.add_argument(
+        "--display-mode",
+        choices=["fullscreen", "windowed", "borderless"],
+        help="DirectDraw runtime mode; default installs fullscreen passthrough with CP949 text hooks",
+    )
+    parser.add_argument("--width", type=int, help="windowed 4:3 width")
+    parser.add_argument("--height", type=int, help="windowed 4:3 height")
     parser.add_argument("--dry-run", action="store_true")
 
 
