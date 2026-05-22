@@ -20,9 +20,9 @@ import wfantasy_steam_kr_launcher as core
 
 APP_TITLE = "Wind Fantasy KR -> Steam TW 패치 런처"
 APP_RIGHTS_NOTICE = "Team-JHF 비공식 패치 런처 - 원본 게임 리소스의 권리는 각 원 권리자에게 있습니다."
-LAUNCHER_ART_RELATIVE = Path("assets") / "launcher_art.gif"
+LAUNCHER_ART_RELATIVE = Path("assets") / "launcher_art.png"
 LAUNCHER_ART_PANEL_WIDTH = 330
-LAUNCHER_ART_FOCUS_X = 0.58
+LAUNCHER_ART_FOCUS_X = 0.50
 LAUNCHER_ART_FOCUS_Y = 0.50
 DISPLAY_UNCHANGED = "건드리지 않음"
 DISPLAY_WINDOWED = "창모드"
@@ -470,6 +470,15 @@ def main(argv: list[str] | None = None) -> int:
         payload = core.ddraw_payload_path()
         if not payload.exists():
             raise SystemExit(f"DirectDraw/CP949 runtime payload is missing: {payload}")
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            probe = PatchGui.__new__(PatchGui)
+            image = probe._load_launcher_art()
+            if image is None:
+                raise SystemExit(f"launcher art is missing or unreadable: {LAUNCHER_ART_RELATIVE}")
+        finally:
+            root.destroy()
         return 0
     app = PatchGui()
     app.mainloop()

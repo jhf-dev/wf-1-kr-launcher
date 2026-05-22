@@ -2,7 +2,7 @@
 from pathlib import Path
 
 datas = []
-launcher_art = Path('assets') / 'launcher_art.gif'
+launcher_art = Path('assets') / 'launcher_art.png'
 if launcher_art.is_file():
     datas.append((str(launcher_art), 'assets'))
 
