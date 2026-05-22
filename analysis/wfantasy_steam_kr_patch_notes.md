@@ -461,11 +461,46 @@ Real Steam folder state after this check:
 - no `_wfantasy_kr_patch_backup`
 - no running WF1 processes
 
+## Live Steam Apply Verification
+
+Applied to the real Steam folder on 2026-05-22:
+
+`C:\Program Files (x86)\Steam\steamapps\common\Wind Fantasy`
+
+Command:
+
+```powershell
+python tooling\wfantasy_steam_kr_launcher.py apply --display-mode windowed --width 1280 --height 960
+```
+
+Post-apply state:
+
+- `game.ini`, `bmp`, `man`, and `stage` match the KR source hashes.
+- Compatibility-check files still match between KR and Steam/TW:
+  `face`, `manani`, `manbmp`, `map`, `mapbmp`, and `Wave`.
+- All checked archive tables still parse and keep the same entry order.
+- Root `ddraw.dll` matches `payload/ddraw.dll`.
+- `wfantasy_ddraw.ini` has `mode=windowed`, `width=1280`, `height=960`, and
+  `text_cp949=1`.
+- Original Steam/TW overlay files were backed up under
+  `_wfantasy_kr_patch_backup`.
+
+Visual smoke results from the real Steam folder:
+
+- `analysis\wf1_live_cp949_save_slots_windowed.png`
+  - save/load slot text renders as Korean, including `빈 / 공 / 간`.
+- `analysis\wf1_live_cp949_new_game_windowed.png`
+  - new-game dialogue renders Korean text:
+    `너.... 다시 한번 말해봐!!`
+
+After capture, the live game process was stopped. The real Steam folder remains
+patched so the user can launch and continue manual play testing.
+
 ## Next Safe Step
 
-The real Steam folder has not been modified yet. Applying the patch to the real
-Steam folder will now install both the KR data overlay and the WF1 CP949
-DirectDraw runtime.
+The real Steam folder is currently patched. The next safety check is either a
+manual play test through `WindConfig.exe`/Steam, or a reversible restore smoke if
+we need to prove uninstall behavior on the live folder.
 
 The next implementation step should be:
 
