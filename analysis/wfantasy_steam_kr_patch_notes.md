@@ -417,8 +417,13 @@ Runtime behavior:
   - `KERNEL32!GetACP`
 - `TextOutA` calls are converted from CP949 bytes to Unicode and then rendered
   through `TextOutW`, preserving the caller's `nCount`.
-- `CreateFontA` is forced to `HANGEUL_CHARSET`, with `Gulim` as fallback for
-  Chinese/Japanese/default charset requests.
+- `CreateFontA` is hooked for diagnostics and optional override, but the
+  default runtime path now preserves the game's original font charset and
+  face name. Static/dynamic checks show the Steam path creates the same font
+  family pattern as the Korean executable reference: `height=16..54`,
+  `charset=136`, `quality=3`, `pitch=2`, and `face=NULL`.
+- Optional font overrides are available through `font_charset=hangul` and
+  `font_face=...` if a later environment needs them.
 - ACP, CP936, and CP950 conversion requests are mapped to CP949 while
   `text_cp949=1`.
 
@@ -440,6 +445,8 @@ input_fix=1
 audio_focus_fix=1
 inactive_window_spoof=1
 text_cp949=1
+font_charset=preserve
+font_face=
 ```
 
 Windowed smoke verification:
@@ -453,6 +460,18 @@ Windowed smoke verification:
 - Visual result:
   save/load slot text that previously appeared as Chinese glyphs now renders as
   Korean, including repeated `빈 / 공 / 간` slot labels.
+
+Font-size follow-up:
+
+- The first CP949 runtime forced `HANGEUL_CHARSET` and could fall back to
+  `Gulim`, which made the visible text feel slightly larger than expected.
+- A follow-up comparison checked the Korean executable's `CreateFontA` callsite
+  and the Steam runtime calls. Both use `charset=136`, `quality=3`, `pitch=2`,
+  and `face=NULL` for the generated font sizes.
+- The proxy now defaults to preserving those font parameters while still
+  converting CP949 text through `TextOutW`.
+- Smoke root and live Steam root both rendered Korean text with
+  `font_charset=preserve`.
 
 Real Steam folder state after this check:
 
@@ -492,6 +511,8 @@ Visual smoke results from the real Steam folder:
 - `analysis\wf1_live_cp949_new_game_windowed.png`
   - new-game dialogue renders Korean text:
     `너.... 다시 한번 말해봐!!`
+- `analysis\wf1_live_preserve_charset_windowed.png`
+  - live runtime with preserved font charset/face renders Korean dialogue text.
 
 After capture, the live game process was stopped. The real Steam folder remains
 patched so the user can launch and continue manual play testing.

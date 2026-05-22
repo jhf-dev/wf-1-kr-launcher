@@ -141,6 +141,17 @@ def state_path(tw_root: Path) -> Path:
     return tw_root / BACKUP_DIR_NAME / STATE_FILE_NAME
 
 
+def read_state(tw_root: Path) -> dict[str, object] | None:
+    path = state_path(tw_root)
+    if not path.exists():
+        return None
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def file_status(kr_root: Path, tw_root: Path, relative_path: str) -> FileStatus:
     src = find_case_insensitive(kr_root, relative_path)
     dst = find_case_insensitive(tw_root, relative_path)
@@ -300,6 +311,8 @@ def normalize_display_config(
         "audio_focus_fix": 1,
         "inactive_window_spoof": 1,
         "text_cp949": 1,
+        "font_charset": "preserve",
+        "font_face": "",
     }
 
 
@@ -313,6 +326,8 @@ def render_ddraw_config(config: dict[str, int | str]) -> bytes:
         "audio_focus_fix",
         "inactive_window_spoof",
         "text_cp949",
+        "font_charset",
+        "font_face",
     ]
     lines = [f"[{DDRAW_CONFIG_SECTION}]"]
     lines.extend(f"{key}={config[key]}" for key in ordered_keys)
@@ -332,14 +347,48 @@ def read_ddraw_config(path: Path) -> dict[str, str]:
     return values
 
 
-def runtime_file_report(tw_root: Path, relative_path: str, desired_data: bytes, dry_run: bool) -> dict[str, object]:
+def previous_launcher_created_runtime(
+    previous_state: dict[str, object] | None,
+    relative_path: str,
+    before_hash: str | None,
+) -> bool:
+    if previous_state is None or before_hash is None:
+        return False
+    runtime_report = previous_state.get("directdraw_runtime")
+    if not isinstance(runtime_report, dict):
+        return False
+    for item in runtime_report.get("files", []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("path", "")).replace("\\", "/").lower() != relative_path.replace("\\", "/").lower():
+            continue
+        if item.get("target_exists_before"):
+            return False
+        expected_hashes = {
+            value
+            for value in (item.get("target_sha256_after"), item.get("desired_sha256"))
+            if isinstance(value, str)
+        }
+        return before_hash in expected_hashes
+    return False
+
+
+def runtime_file_report(
+    tw_root: Path,
+    relative_path: str,
+    desired_data: bytes,
+    dry_run: bool,
+    previous_state: dict[str, object] | None = None,
+) -> dict[str, object]:
     target = target_path(tw_root, relative_path)
     before_hash = sha256_file(target) if target.exists() else None
     desired_hash = sha256_bytes(desired_data)
     changed = before_hash != desired_hash
-    target_exists_before = target.exists()
+    target_present_before = target.exists()
+    launcher_created_before = previous_launcher_created_runtime(previous_state, relative_path, before_hash)
+    target_exists_before = target_present_before and not launcher_created_before
     if changed and not dry_run:
-        if target.exists():
+        if target_present_before and not launcher_created_before:
             backup_file_once(tw_root, relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(desired_data)
@@ -347,6 +396,9 @@ def runtime_file_report(tw_root: Path, relative_path: str, desired_data: bytes, 
         "path": relative_path,
         "changed": changed,
         "target_exists_before": target_exists_before,
+        "target_present_before": target_present_before,
+        "launcher_created_before": launcher_created_before,
+        "replaced_launcher_created_file": launcher_created_before and changed and not dry_run,
         "target_sha256_before": before_hash,
         "target_sha256_after": desired_hash if changed and not dry_run else before_hash,
         "desired_sha256": desired_hash,
@@ -372,9 +424,10 @@ def install_directdraw_runtime(
     config = normalize_display_config(display_mode, width, height)
     dll_data = payload.read_bytes()
     config_data = render_ddraw_config(config)
+    previous_state = read_state(tw_root)
     files = [
-        runtime_file_report(tw_root, "ddraw.dll", dll_data, dry_run),
-        runtime_file_report(tw_root, "wfantasy_ddraw.ini", config_data, dry_run),
+        runtime_file_report(tw_root, "ddraw.dll", dll_data, dry_run, previous_state),
+        runtime_file_report(tw_root, "wfantasy_ddraw.ini", config_data, dry_run, previous_state),
     ]
     return {
         "changed": any(bool(item["changed"]) for item in files),

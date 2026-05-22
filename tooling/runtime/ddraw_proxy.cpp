@@ -16,6 +16,8 @@ struct RuntimeConfig {
     BOOL audio_focus_fix;
     BOOL inactive_window_spoof;
     BOOL text_cp949;
+    char font_charset[16];
+    char font_face[LF_FACESIZE];
 };
 
 struct DDProxy;
@@ -45,6 +47,7 @@ static WNDPROC g_original_wndproc = NULL;
 static DWORD g_focus_resume_tick = 0;
 static BOOL g_window_active = TRUE;
 static BOOL g_hooks_installed = FALSE;
+static LONG g_createfont_log_count = 0;
 
 typedef HRESULT (WINAPI *DirectDrawCreateProc)(GUID FAR *, LPDIRECTDRAW FAR *, IUnknown FAR *);
 typedef BOOL (WINAPI *SetCursorPosProc)(int, int);
@@ -130,6 +133,8 @@ static RuntimeConfig load_config() {
     config.audio_focus_fix = TRUE;
     config.inactive_window_spoof = TRUE;
     config.text_cp949 = TRUE;
+    lstrcpynA(config.font_charset, "preserve", sizeof(config.font_charset));
+    config.font_face[0] = '\0';
 
     char dir[MAX_PATH];
     char ini[MAX_PATH];
@@ -144,6 +149,15 @@ static RuntimeConfig load_config() {
     config.audio_focus_fix = GetPrivateProfileIntA("wfantasy_ddraw", "audio_focus_fix", 1, ini) != 0;
     config.inactive_window_spoof = GetPrivateProfileIntA("wfantasy_ddraw", "inactive_window_spoof", 1, ini) != 0;
     config.text_cp949 = GetPrivateProfileIntA("wfantasy_ddraw", "text_cp949", 1, ini) != 0;
+    GetPrivateProfileStringA(
+        "wfantasy_ddraw",
+        "font_charset",
+        config.font_charset,
+        config.font_charset,
+        sizeof(config.font_charset),
+        ini
+    );
+    GetPrivateProfileStringA("wfantasy_ddraw", "font_face", "", config.font_face, sizeof(config.font_face), ini);
     if (config.width < 320) {
         config.width = 640;
     }
@@ -171,12 +185,34 @@ static void debug_log(const RuntimeConfig &config, const char *message) {
     CloseHandle(file);
 }
 
+static void copy_face_for_log(char *buffer, DWORD size, LPCSTR face_name) {
+    if (size == 0) {
+        return;
+    }
+    if (face_name == NULL) {
+        lstrcpynA(buffer, "<NULL>", size);
+        return;
+    }
+    if (face_name[0] == '\0') {
+        lstrcpynA(buffer, "<empty>", size);
+        return;
+    }
+    lstrcpynA(buffer, face_name, size);
+}
+
 static BOOL runtime_scaled_mode() {
     return g_config_loaded && scaled_mode(g_config);
 }
 
 static BOOL runtime_text_cp949() {
     return !g_config_loaded || g_config.text_cp949;
+}
+
+static BOOL runtime_force_hangul_font_charset() {
+    return g_config_loaded && (
+        lstrcmpiA(g_config.font_charset, "hangul") == 0 ||
+        lstrcmpiA(g_config.font_charset, "hangeul") == 0
+    );
 }
 
 static UINT effective_text_code_page(UINT code_page) {
@@ -490,16 +526,36 @@ static HFONT WINAPI Hook_CreateFontA(
     LPCSTR effective_face = face_name;
     DWORD effective_charset = char_set;
     if (runtime_text_cp949()) {
-        DWORD original_charset = char_set;
-        effective_charset = HANGEUL_CHARSET;
-        if (
-            face_name == NULL ||
-            face_name[0] == '\0' ||
-            original_charset == GB2312_CHARSET ||
-            original_charset == CHINESEBIG5_CHARSET ||
-            original_charset == SHIFTJIS_CHARSET
-        ) {
-            effective_face = "Gulim";
+        if (runtime_force_hangul_font_charset()) {
+            effective_charset = HANGEUL_CHARSET;
+        }
+        if (g_config.font_face[0] != '\0') {
+            effective_face = g_config.font_face;
+        }
+    }
+    if (g_config_loaded && g_config.debug) {
+        LONG log_index = InterlockedIncrement(&g_createfont_log_count);
+        if (log_index <= 32) {
+            char original_face[LF_FACESIZE + 16];
+            char mapped_face[LF_FACESIZE + 16];
+            char message[512];
+            copy_face_for_log(original_face, sizeof(original_face), face_name);
+            copy_face_for_log(mapped_face, sizeof(mapped_face), effective_face);
+            wsprintfA(
+                message,
+                "CreateFontA[%ld] h=%d w=%d weight=%d charset=%lu quality=%lu pitch=%lu face=%s -> charset=%lu face=%s",
+                log_index,
+                height,
+                width,
+                weight,
+                char_set,
+                quality,
+                pitch_and_family,
+                original_face,
+                effective_charset,
+                mapped_face
+            );
+            debug_log(g_config, message);
         }
     }
     if (g_real_CreateFontA == NULL) {

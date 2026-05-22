@@ -89,6 +89,34 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("width=1280", rendered)
         self.assertIn("height=960", rendered)
         self.assertIn("text_cp949=1", rendered)
+        self.assertIn("font_charset=preserve", rendered)
+        self.assertIn("font_face=", rendered)
+
+    def test_reapply_replaces_launcher_created_runtime_without_promoting_to_backup(self) -> None:
+        before_data = b"launcher-created-runtime-v1"
+        after_data = b"launcher-created-runtime-v2"
+        (self.tw / "ddraw.dll").write_bytes(before_data)
+        previous_state = {
+            "directdraw_runtime": {
+                "files": [
+                    {
+                        "path": "ddraw.dll",
+                        "target_exists_before": False,
+                        "target_sha256_after": launcher.sha256_bytes(before_data),
+                        "desired_sha256": launcher.sha256_bytes(before_data),
+                    }
+                ]
+            }
+        }
+
+        report = launcher.runtime_file_report(self.tw, "ddraw.dll", after_data, False, previous_state)
+
+        self.assertFalse(report["target_exists_before"])
+        self.assertTrue(report["target_present_before"])
+        self.assertTrue(report["launcher_created_before"])
+        self.assertTrue(report["replaced_launcher_created_file"])
+        self.assertEqual(after_data, (self.tw / "ddraw.dll").read_bytes())
+        self.assertFalse((self.tw / launcher.BACKUP_DIR_NAME / "ddraw.dll").exists())
 
     def test_directdraw_proxy_contains_cp949_text_hooks(self) -> None:
         source = (Path(__file__).resolve().parents[1] / "tooling" / "runtime" / "ddraw_proxy.cpp").read_text(
@@ -102,6 +130,9 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("Hook_GetACP", source)
         self.assertIn("HANGEUL_CHARSET", source)
         self.assertIn("effective_text_code_page", source)
+        self.assertIn("font_face[0] != '\\0'", source)
+        self.assertIn("runtime_force_hangul_font_charset", source)
+        self.assertNotIn('effective_face = "Gulim"', source)
 
 
 if __name__ == "__main__":
