@@ -372,6 +372,16 @@ static BOOL client_mouse_lparam_to_logical(HWND hwnd, LPARAM src, LPARAM *dst) {
     return TRUE;
 }
 
+static WPARAM client_mouse_wparam_to_logical(UINT msg, WPARAM wparam) {
+    if (!runtime_scaled_mode() || !g_config.input_fix) {
+        return wparam;
+    }
+    if (msg == WM_MOUSEMOVE) {
+        return wparam & ~MK_RBUTTON;
+    }
+    return wparam;
+}
+
 static BOOL WINAPI Hook_SetCursorPos(int x, int y) {
     int mapped_x = x;
     int mapped_y = y;
@@ -685,8 +695,10 @@ static BOOL patch_import(const char *dll_name, const char *func_name, void *repl
 }
 
 static LRESULT CALLBACK Hook_WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    WPARAM forward_wparam = wparam;
     LPARAM forward_lparam = lparam;
     if (client_mouse_message(msg)) {
+        forward_wparam = client_mouse_wparam_to_logical(msg, wparam);
         client_mouse_lparam_to_logical(hwnd, lparam, &forward_lparam);
     }
 
@@ -716,9 +728,9 @@ static LRESULT CALLBACK Hook_WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPAR
         }
     }
     if (g_original_wndproc != NULL) {
-        return CallWindowProcA(g_original_wndproc, hwnd, msg, wparam, forward_lparam);
+        return CallWindowProcA(g_original_wndproc, hwnd, msg, forward_wparam, forward_lparam);
     }
-    return DefWindowProcA(hwnd, msg, wparam, forward_lparam);
+    return DefWindowProcA(hwnd, msg, forward_wparam, forward_lparam);
 }
 
 static void install_runtime_hooks() {

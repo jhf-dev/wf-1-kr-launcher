@@ -526,7 +526,7 @@ shape:
 - `WF1_KR_Steam_Patch_GUI.exe` is the root standalone build.
 - `WF1_KR_Steam_Patch_GUI.cmd` is a convenience wrapper.
 - `WF1_KR_Steam_Patch_GUI.spec` is the PyInstaller build recipe.
-- `assets/launcher_art.gif` is bundled into the frozen executable.
+- `assets/launcher_art.png` is bundled into the frozen executable.
 - `dist\WF1_KR_Steam_Patch\` is the local package folder.
 - `dist\WF1_KR_Steam_Patch.zip` is the local distributable zip.
 
@@ -563,6 +563,30 @@ Verification after packaging:
 
 The real Steam folder remains patched with the package payload so the user can
 continue manual play testing.
+
+## Right-Click Drag Input Tweak
+
+Reported on 2026-05-23:
+
+- Holding right click and dragging in windowed/scaled mode repeatedly toggled
+  the in-game menu.
+
+Root-cause hypothesis:
+
+- Windows attaches `MK_RBUTTON` to every `WM_MOUSEMOVE` while the right button
+  is held.
+- The proxy already rewrites mouse move coordinates for scaled window modes and
+  previously forwarded `wParam` unchanged.
+- If the game treats `MK_RBUTTON` on mouse move as another right-click command,
+  dragging becomes repeated menu input.
+
+Fix:
+
+- Keep `WM_RBUTTONDOWN` and `WM_RBUTTONUP` unchanged.
+- For scaled-mode `WM_MOUSEMOVE`, clear only the `MK_RBUTTON` state bit before
+  forwarding to the original game WndProc.
+- This keeps right-click as an edge event while avoiding repeated menu toggles
+  during right-button drag.
 
 ## Next Safe Step
 

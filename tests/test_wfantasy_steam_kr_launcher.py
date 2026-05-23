@@ -134,6 +134,16 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("runtime_force_hangul_font_charset", source)
         self.assertNotIn('effective_face = "Gulim"', source)
 
+    def test_directdraw_proxy_suppresses_right_button_drag_repeats(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "tooling" / "runtime" / "ddraw_proxy.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("client_mouse_wparam_to_logical", source)
+        self.assertIn("msg == WM_MOUSEMOVE", source)
+        self.assertIn("wparam & ~MK_RBUTTON", source)
+        self.assertIn("forward_wparam", source)
+
 
 if __name__ == "__main__":
     unittest.main()
