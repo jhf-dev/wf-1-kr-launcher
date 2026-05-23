@@ -54,6 +54,8 @@ static LONG g_createfont_log_count = 0;
 typedef HRESULT (WINAPI *DirectDrawCreateProc)(GUID FAR *, LPDIRECTDRAW FAR *, IUnknown FAR *);
 typedef BOOL (WINAPI *SetCursorPosProc)(int, int);
 typedef BOOL (WINAPI *ClipCursorProc)(const RECT *);
+typedef BOOL (WINAPI *PeekMessageAProc)(LPMSG, HWND, UINT, UINT, UINT);
+typedef BOOL (WINAPI *GetMessageAProc)(LPMSG, HWND, UINT, UINT);
 typedef MCIERROR (WINAPI *MciSendStringAProc)(LPCSTR, LPSTR, UINT, HWND);
 typedef BOOL (WINAPI *TextOutAProc)(HDC, int, int, LPCSTR, int);
 typedef BOOL (WINAPI *TextOutWProc)(HDC, int, int, LPCWSTR, int);
@@ -79,6 +81,8 @@ typedef UINT (WINAPI *GetACPProc)(void);
 
 static SetCursorPosProc g_real_SetCursorPos = NULL;
 static ClipCursorProc g_real_ClipCursor = NULL;
+static PeekMessageAProc g_real_PeekMessageA = NULL;
+static GetMessageAProc g_real_GetMessageA = NULL;
 static MciSendStringAProc g_real_mciSendStringA = NULL;
 static TextOutAProc g_real_TextOutA = NULL;
 static TextOutWProc g_real_TextOutW = NULL;
@@ -379,7 +383,7 @@ static BOOL client_mouse_lparam_to_logical(HWND hwnd, LPARAM src, LPARAM *dst) {
 }
 
 static WPARAM client_mouse_wparam_to_logical(UINT msg, WPARAM wparam) {
-    if (!runtime_scaled_mode() || !g_config.input_fix) {
+    if (!g_config_loaded || !g_config.input_fix) {
         return wparam;
     }
     if (msg == WM_MOUSEMOVE) {
@@ -393,6 +397,29 @@ static WPARAM client_mouse_wparam_to_logical(UINT msg, WPARAM wparam) {
         return wparam & ~locked_buttons;
     }
     return wparam;
+}
+
+static void sanitize_mouse_msg(MSG *msg) {
+    if (msg == NULL || !client_mouse_message(msg->message)) {
+        return;
+    }
+    msg->wParam = client_mouse_wparam_to_logical(msg->message, msg->wParam);
+}
+
+static BOOL WINAPI Hook_PeekMessageA(LPMSG msg, HWND hwnd, UINT min_filter, UINT max_filter, UINT remove_msg) {
+    BOOL result = g_real_PeekMessageA != NULL ? g_real_PeekMessageA(msg, hwnd, min_filter, max_filter, remove_msg) : FALSE;
+    if (result) {
+        sanitize_mouse_msg(msg);
+    }
+    return result;
+}
+
+static BOOL WINAPI Hook_GetMessageA(LPMSG msg, HWND hwnd, UINT min_filter, UINT max_filter) {
+    BOOL result = g_real_GetMessageA != NULL ? g_real_GetMessageA(msg, hwnd, min_filter, max_filter) : FALSE;
+    if (result > 0) {
+        sanitize_mouse_msg(msg);
+    }
+    return result;
 }
 
 static BOOL WINAPI Hook_SetCursorPos(int x, int y) {
@@ -752,6 +779,8 @@ static void install_runtime_hooks() {
     }
     patch_import("USER32.dll", "SetCursorPos", reinterpret_cast<void *>(Hook_SetCursorPos), reinterpret_cast<void **>(&g_real_SetCursorPos));
     patch_import("USER32.dll", "ClipCursor", reinterpret_cast<void *>(Hook_ClipCursor), reinterpret_cast<void **>(&g_real_ClipCursor));
+    patch_import("USER32.dll", "PeekMessageA", reinterpret_cast<void *>(Hook_PeekMessageA), reinterpret_cast<void **>(&g_real_PeekMessageA));
+    patch_import("USER32.dll", "GetMessageA", reinterpret_cast<void *>(Hook_GetMessageA), reinterpret_cast<void **>(&g_real_GetMessageA));
     patch_import("WINMM.dll", "mciSendStringA", reinterpret_cast<void *>(Hook_mciSendStringA), reinterpret_cast<void **>(&g_real_mciSendStringA));
     patch_import("GDI32.dll", "TextOutA", reinterpret_cast<void *>(Hook_TextOutA), reinterpret_cast<void **>(&g_real_TextOutA));
     patch_import("GDI32.dll", "CreateFontA", reinterpret_cast<void *>(Hook_CreateFontA), reinterpret_cast<void **>(&g_real_CreateFontA));

@@ -606,7 +606,7 @@ def install_directdraw_runtime(
             "reason": "display runtime unchanged",
         }
 
-    base_config = read_ddraw_config(target_path(tw_root, "wfantasy_ddraw.ini")) if not install_when_unspecified else None
+    base_config = read_ddraw_config(target_path(tw_root, "wfantasy_ddraw.ini")) if display_mode is None else None
     config = normalize_display_config(display_mode, width, height, left_click_lock, right_click_lock, base_config)
     dll_data = payload.read_bytes()
     config_data = render_ddraw_config(config)

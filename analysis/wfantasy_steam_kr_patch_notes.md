@@ -573,7 +573,7 @@ Reported on 2026-05-23:
 - Left-click drag can hit the same family of repeated-input behavior, likely
   because the original game polls held-button state from movement messages.
 
-Root-cause hypothesis:
+Root-cause hypothesis, updated after the first checkbox report:
 
 - Windows attaches `MK_LBUTTON`/`MK_RBUTTON` to every `WM_MOUSEMOVE` while the
   matching button is held.
@@ -581,17 +581,27 @@ Root-cause hypothesis:
   previously forwarded `wParam` unchanged.
 - If the game treats held-button state on mouse move as another click command,
   dragging becomes repeated menu input on modern fast systems.
+- The live `wfantasy_ddraw.ini` had the checkbox values enabled, but the first
+  implementation only ran in scaled/windowed modes. `mode=fullscreen` bypassed
+  the lock.
+- `WFantasy_win10.exe` also imports `PeekMessageA` and `GetMessageA`, so the
+  game may inspect `MSG.wParam` before the subclassed WndProc receives it.
 
 Fix:
 
 - Keep `WM_LBUTTONDOWN`/`WM_LBUTTONUP` and `WM_RBUTTONDOWN`/`WM_RBUTTONUP`
   unchanged.
-- For scaled-mode `WM_MOUSEMOVE`, clear only the configured held-button state
-  bits before forwarding to the original game WndProc.
+- For `WM_MOUSEMOVE`, clear only the configured held-button state bits before
+  forwarding to the original game WndProc.
+- Apply the same `WM_MOUSEMOVE` `wParam` normalization to `PeekMessageA` and
+  `GetMessageA` results, covering direct message-loop input handling.
 - `left_click_lock` and `right_click_lock` are independent INI/launcher options
   and default to enabled.
 - This keeps clicks as edge events while avoiding repeated menu/window toggles
   during button drag.
+- Display mode "unchanged" now preserves existing `mode`/`width`/`height` from
+  `wfantasy_ddraw.ini`, so applying checkbox changes does not silently reset
+  the display mode.
 
 ## Next Safe Step
 

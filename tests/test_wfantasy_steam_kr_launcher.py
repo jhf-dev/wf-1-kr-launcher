@@ -138,6 +138,46 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(0, report["config"]["left_click_lock"])
         self.assertEqual(1, report["config"]["right_click_lock"])
 
+    def test_apply_runtime_update_preserves_existing_display_mode_when_unchanged(self) -> None:
+        (self.tw / "wfantasy_ddraw.ini").write_text(
+            "\n".join(
+                [
+                    "[wfantasy_ddraw]",
+                    "mode=windowed",
+                    "width=1280",
+                    "height=960",
+                    "debug=0",
+                    "input_fix=1",
+                    "left_click_lock=0",
+                    "right_click_lock=0",
+                    "audio_focus_fix=1",
+                    "inactive_window_spoof=1",
+                    "text_cp949=1",
+                    "font_charset=preserve",
+                    "font_face=",
+                    "",
+                ]
+            ),
+            encoding="ascii",
+        )
+
+        report = launcher.install_directdraw_runtime(
+            self.tw,
+            None,
+            None,
+            None,
+            True,
+            True,
+            dry_run=True,
+            install_when_unspecified=True,
+        )
+
+        self.assertEqual("windowed", report["config"]["mode"])
+        self.assertEqual(1280, report["config"]["width"])
+        self.assertEqual(960, report["config"]["height"])
+        self.assertEqual(1, report["config"]["left_click_lock"])
+        self.assertEqual(1, report["config"]["right_click_lock"])
+
     def test_reapply_replaces_launcher_created_runtime_without_promoting_to_backup(self) -> None:
         before_data = b"launcher-created-runtime-v1"
         after_data = b"launcher-created-runtime-v2"
@@ -186,12 +226,16 @@ class LauncherTests(unittest.TestCase):
         )
 
         self.assertIn("client_mouse_wparam_to_logical", source)
+        self.assertIn("if (!g_config_loaded || !g_config.input_fix)", source)
         self.assertIn("left_click_lock", source)
         self.assertIn("right_click_lock", source)
         self.assertIn("msg == WM_MOUSEMOVE", source)
         self.assertIn("MK_LBUTTON", source)
         self.assertIn("MK_RBUTTON", source)
         self.assertIn("wparam & ~locked_buttons", source)
+        self.assertIn("sanitize_mouse_msg", source)
+        self.assertIn('"PeekMessageA"', source)
+        self.assertIn('"GetMessageA"', source)
         self.assertIn("forward_wparam", source)
 
 

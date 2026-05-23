@@ -55,7 +55,7 @@ Steam Win10 실행 파일은 DirectDraw 기반 640x480 렌더링을 사용합니
 
 창모드/전체 창 모드에서는 원본 게임의 640x480 좌표계를 유지하기 위해 렌더링과 입력 기준을 항상 중앙 4:3 게임 영역으로 제한합니다. `SetCursorPos`/`ClipCursor`는 실제 창 좌표로 확장하고, WndProc 마우스 입력은 640x480 논리 좌표로 되돌립니다. 창모드에서는 원본의 전체 화면 커서 제한을 해제해 타이틀바 이동과 닫기 버튼 접근이 가능하도록 합니다.
 
-일부 메뉴/창 조작은 버튼을 누른 채 이동할 때 반복 입력처럼 처리될 수 있습니다. 런처의 `좌클릭 잠금`, `우클릭 잠금`은 `WM_MOUSEMOVE` 중 해당 버튼 상태만 제거해 클릭 down/up은 유지하면서 드래그 중 반복 토글을 줄입니다. 두 옵션은 `wfantasy_ddraw.ini`의 `left_click_lock`, `right_click_lock` 값으로 저장됩니다.
+일부 메뉴/창 조작은 버튼을 누른 채 이동할 때 반복 입력처럼 처리될 수 있습니다. 런처의 `좌클릭 잠금`, `우클릭 잠금`은 `WM_MOUSEMOVE` 중 해당 버튼 상태만 제거해 클릭 down/up은 유지하면서 드래그 중 반복 토글을 줄입니다. 두 옵션은 `wfantasy_ddraw.ini`의 `left_click_lock`, `right_click_lock` 값으로 저장됩니다. 잠금은 창모드 보정과 별개로 전체화면 통과 모드에서도 적용되며, 게임이 `PeekMessageA`/`GetMessageA`로 메시지를 직접 확인하는 경로까지 같은 방식으로 보정합니다.
 
 WF1 한국어 데이터의 CP949 텍스트는 Steam Win10 실행 파일이 직접 import하는 `TextOutA`, `MultiByteToWideChar`, `WideCharToMultiByte`, `GetACP` 경로에서 보정합니다. 기본 설정은 KR 실행파일의 폰트 호출 패턴과 맞추기 위해 `font_charset=preserve`, `font_face=`를 사용합니다.
 

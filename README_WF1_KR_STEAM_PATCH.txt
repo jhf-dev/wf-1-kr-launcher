@@ -34,6 +34,7 @@ Wind Fantasy KR -> Steam TW 패치 런처
   - 전체 창 모드(borderless)는 중앙 4:3 게임 영역과 좌우 pillarbox로 출력
   - 창모드/전체 창 모드에서 640x480 기준 마우스 입력/커서 좌표 보정을 적용
   - 좌클릭 잠금/우클릭 잠금은 드래그 중 반복 클릭 신호를 줄이도록 각각 토글 가능
+  - 클릭 잠금은 전체화면 통과 모드에서도 적용되며 PeekMessageA/GetMessageA 직접 처리 경로도 보정
 
 주의:
   - 패치 적용 전 게임과 WindConfig를 종료하세요.
