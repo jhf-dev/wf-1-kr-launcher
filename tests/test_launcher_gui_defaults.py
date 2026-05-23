@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,12 @@ def write_target_layout(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     for name in core.TARGET_EXECUTABLES:
         (root / name).write_bytes(b"placeholder")
+
+
+def write_kr_layout(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for name in core.KR_OVERLAY_FILES:
+        (root / name.upper()).write_bytes(b"placeholder")
 
 
 class LauncherGuiDefaultsTest(unittest.TestCase):
@@ -42,11 +49,36 @@ class LauncherGuiDefaultsTest(unittest.TestCase):
 
             self.assertEqual(game_root.resolve(), detected)
 
-    def test_gui_leaves_kr_blank_and_prefills_detected_steam_path(self) -> None:
-        detected_root = Path(r"C:\Steam\steamapps\common\Wind Fantasy")
-        with mock.patch.object(gui.core, "detect_steam_wf1_root", return_value=detected_root):
-            self.assertEqual("", gui.default_kr_root())
-            self.assertEqual(str(detected_root), gui.default_tw_root())
+    def test_gui_leaves_kr_blank_without_recent_path_and_prefills_detected_steam_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            detected_root = Path(r"C:\Steam\steamapps\common\Wind Fantasy")
+            settings_path = Path(temp_dir) / "settings.json"
+            env = {gui.core.SETTINGS_ENV_VAR: str(settings_path)}
+            with mock.patch.dict(os.environ, env), mock.patch.object(
+                gui.core, "detect_steam_wf1_root", return_value=detected_root
+            ):
+                self.assertEqual("", gui.default_kr_root())
+                self.assertEqual(str(detected_root), gui.default_tw_root())
+
+    def test_gui_prefills_recent_valid_kr_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            kr_root = temp / "KR"
+            settings_path = temp / "settings.json"
+            write_kr_layout(kr_root)
+            gui.core.remember_kr_root(kr_root, settings_path)
+            with mock.patch.dict(os.environ, {gui.core.SETTINGS_ENV_VAR: str(settings_path)}):
+                self.assertEqual(str(kr_root.resolve()), gui.default_kr_root())
+
+    def test_gui_ignores_recent_invalid_kr_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            kr_root = temp / "KR"
+            settings_path = temp / "settings.json"
+            kr_root.mkdir()
+            gui.core.remember_kr_root(kr_root, settings_path)
+            with mock.patch.dict(os.environ, {gui.core.SETTINGS_ENV_VAR: str(settings_path)}):
+                self.assertEqual("", gui.default_kr_root())
 
     def test_direct_win10_launch_uses_wfantasy_win10_exe(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

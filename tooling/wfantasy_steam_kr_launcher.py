@@ -33,6 +33,11 @@ TW_DEFAULT = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Wind Fantasy")
 
 BACKUP_DIR_NAME = "_wfantasy_kr_patch_backup"
 STATE_FILE_NAME = "wfantasy_kr_patch_state.json"
+SETTINGS_ENV_VAR = "WF1_KR_PATCH_SETTINGS_PATH"
+SETTINGS_FILE_NAME = "launcher_settings.json"
+SETTINGS_VENDOR_DIR = "Team-JHF"
+SETTINGS_APP_DIR = "WF1_KR_Steam_Patch"
+SETTINGS_LAST_KR_ROOT = "last_kr_root"
 
 KR_OVERLAY_FILES = [
     "game.ini",
@@ -162,6 +167,65 @@ def backup_path_for(tw_root: Path, relative_path: str) -> Path:
 
 def state_path(tw_root: Path) -> Path:
     return tw_root / BACKUP_DIR_NAME / STATE_FILE_NAME
+
+
+def launcher_settings_path() -> Path:
+    override = os.environ.get(SETTINGS_ENV_VAR)
+    if override:
+        return Path(override).expanduser()
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if base:
+        return Path(base) / SETTINGS_VENDOR_DIR / SETTINGS_APP_DIR / SETTINGS_FILE_NAME
+    return Path.home() / f".{SETTINGS_APP_DIR.lower()}" / SETTINGS_FILE_NAME
+
+
+def read_launcher_settings(path: Path | None = None) -> dict[str, object]:
+    settings_path = path or launcher_settings_path()
+    try:
+        parsed = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def write_launcher_settings(settings: dict[str, object], path: Path | None = None) -> bool:
+    settings_path = path or launcher_settings_path()
+    try:
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
+def has_kr_source_layout(kr_root: Path) -> bool:
+    return kr_root.is_dir() and all(find_case_insensitive(kr_root, name) is not None for name in KR_OVERLAY_FILES)
+
+
+def remember_kr_root(kr_root: Path, path: Path | None = None) -> bool:
+    settings = read_launcher_settings(path)
+    try:
+        resolved = kr_root.expanduser().resolve()
+    except OSError:
+        resolved = kr_root.expanduser()
+    settings[SETTINGS_LAST_KR_ROOT] = str(resolved)
+    return write_launcher_settings(settings, path)
+
+
+def last_kr_root(path: Path | None = None) -> Path | None:
+    settings = read_launcher_settings(path)
+    value = settings.get(SETTINGS_LAST_KR_ROOT)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        candidate = Path(value).expanduser().resolve()
+    except OSError:
+        return None
+    return candidate if has_kr_source_layout(candidate) else None
+
+
+def default_kr_root_for_cli() -> Path:
+    return last_kr_root() or KR_DEFAULT
 
 
 def read_state(tw_root: Path) -> dict[str, object] | None:
@@ -739,6 +803,7 @@ def apply_patch(args: argparse.Namespace) -> dict[str, object]:
     }
     if not args.dry_run:
         write_state(tw_root, report)
+        remember_kr_root(kr_root)
     return report
 
 
@@ -885,7 +950,7 @@ def launch_win10(args: argparse.Namespace) -> dict[str, object]:
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--kr-root", type=Path, default=KR_DEFAULT)
+    parser.add_argument("--kr-root", type=Path, default=default_kr_root_for_cli())
     parser.add_argument("--tw-root", type=Path, default=TW_DEFAULT)
     parser.add_argument(
         "--display-mode",

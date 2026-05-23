@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import struct
 import tempfile
@@ -25,6 +27,8 @@ def write_pack(path: Path, entries: list[tuple[str, bytes]]) -> None:
 class LauncherTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = Path(tempfile.mkdtemp())
+        self.previous_settings_path = os.environ.get(launcher.SETTINGS_ENV_VAR)
+        os.environ[launcher.SETTINGS_ENV_VAR] = str(self.temp / "settings.json")
         self.kr = self.temp / "KR"
         self.tw = self.temp / "TW"
         self.kr.mkdir()
@@ -33,6 +37,10 @@ class LauncherTests(unittest.TestCase):
         (self.tw / "WindConfig.exe").write_bytes(b"config")
 
     def tearDown(self) -> None:
+        if self.previous_settings_path is None:
+            os.environ.pop(launcher.SETTINGS_ENV_VAR, None)
+        else:
+            os.environ[launcher.SETTINGS_ENV_VAR] = self.previous_settings_path
         shutil.rmtree(self.temp)
 
     def write_source_and_target(self, name: str, source: bytes, target: bytes) -> None:
@@ -70,6 +78,8 @@ class LauncherTests(unittest.TestCase):
         args = type("Args", (), {"kr_root": self.kr, "tw_root": self.tw, "dry_run": False})()
         report = launcher.apply_patch(args)
         self.assertFalse(report["dry_run"])
+        settings = json.loads((self.temp / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(str(self.kr.resolve()), settings[launcher.SETTINGS_LAST_KR_ROOT])
         self.assertEqual((self.tw / "stage").read_bytes(), (self.kr / "STAGE").read_bytes())
         self.assertTrue((self.tw / launcher.BACKUP_DIR_NAME / "stage").exists())
         self.assertEqual((launcher.ddraw_payload_path()).read_bytes(), (self.tw / "ddraw.dll").read_bytes())
@@ -82,6 +92,18 @@ class LauncherTests(unittest.TestCase):
         self.assertNotEqual((self.tw / "stage").read_bytes(), (self.kr / "STAGE").read_bytes())
         self.assertFalse((self.tw / "ddraw.dll").exists())
         self.assertFalse((self.tw / "wfantasy_ddraw.ini").exists())
+
+    def test_last_kr_root_round_trips_only_valid_source_layout(self) -> None:
+        settings_path = self.temp / "custom_settings.json"
+        for name in launcher.KR_OVERLAY_FILES:
+            (self.kr / name.upper()).write_bytes(b"kr")
+
+        self.assertTrue(launcher.remember_kr_root(self.kr, settings_path))
+        self.assertEqual(self.kr.resolve(), launcher.last_kr_root(settings_path))
+
+        shutil.rmtree(self.kr)
+
+        self.assertIsNone(launcher.last_kr_root(settings_path))
 
     def test_windowed_runtime_config_is_4_by_3_and_cp949_enabled(self) -> None:
         config = launcher.normalize_display_config("windowed", 1280, 960)

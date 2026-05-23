@@ -532,7 +532,9 @@ shape:
 
 Launcher behavior:
 
-- Korean source path starts blank and must be selected by the user.
+- Korean source path is restored from the last valid path stored in the user
+  settings file. If no valid recent path exists, it starts blank and must be
+  selected by the user.
 - Steam/TW path is auto-detected from Steam registry/libraryfolders when
   possible.
 - `패치 적용`, `상태 확인`, `TW 원본 복구`, `게임 실행`, and `WindConfig 실행`
@@ -541,6 +543,8 @@ Launcher behavior:
 - `WindConfig 실행` starts `WindConfig.exe`.
 - Display options are `건드리지 않음`, `창모드`, `전체 창 모드`, and
   `전체화면`.
+- Recent launcher settings are stored outside the repo/package at
+  `%LOCALAPPDATA%\Team-JHF\WF1_KR_Steam_Patch\launcher_settings.json`.
 
 Verification after packaging:
 

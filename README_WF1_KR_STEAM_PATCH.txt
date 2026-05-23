@@ -10,7 +10,7 @@ Wind Fantasy KR -> Steam TW 패치 런처
 중요:
   - 이 패치/런처는 게임 리소스 파일을 직접 포함하지 않습니다.
   - 패치 적용에는 사용자가 보유한 기존 한국어판 Wind Fantasy 폴더가 필요합니다.
-  - 한국어판 폴더 입력칸은 빈 값으로 시작하므로 직접 선택해야 합니다.
+  - 한국어판 폴더 입력칸은 직전에 사용한 유효한 경로가 있으면 자동으로 채워집니다.
   - Steam 대만판 폴더는 Steam 설치 정보에서 자동으로 탐지합니다.
   - 이 도구는 Team-JHF가 작성/관리하는 비공식 패치 런처입니다.
   - 위 표기는 런처와 패치 보조 코드에 대한 표시이며, 원본 게임 권리 주장이나 공식 제휴를 의미하지 않습니다.
@@ -19,6 +19,7 @@ Wind Fantasy KR -> Steam TW 패치 런처
 사용 순서:
   1. WF1_KR_Steam_Patch_GUI.exe 실행
   2. 한국어판 Wind Fantasy 폴더 선택
+     직전에 사용한 유효한 경로가 있으면 자동으로 채워집니다.
   3. 자동 탐지된 Steam 대만판 Wind Fantasy 폴더 확인
      자동 탐지에 실패하면 직접 선택
   4. 패치 적용 클릭
@@ -40,6 +41,7 @@ Wind Fantasy KR -> Steam TW 패치 런처
   - 패치 적용 전 게임과 WindConfig를 종료하세요.
   - 한국어판 원본 폴더는 수정하지 않습니다.
   - Steam 대만판 원본 파일은 _wfantasy_kr_patch_backup 폴더에 백업합니다.
+  - 최근 한국어판 경로는 %LOCALAPPDATA%\Team-JHF\WF1_KR_Steam_Patch\launcher_settings.json에 저장합니다.
   - 문제가 있으면 GUI의 TW 원본 복구 버튼을 사용할 수 있습니다.
   - 화면 옵션이 문제를 일으키면 TW 원본 복구로 런처가 만든 ddraw.dll/wfantasy_ddraw.ini도 제거됩니다.
   - 보정만 끄려면 wfantasy_ddraw.ini에서 input_fix=0, left_click_lock=0, right_click_lock=0, audio_focus_fix=0, inactive_window_spoof=0, text_cp949=0으로 바꿀 수 있습니다.

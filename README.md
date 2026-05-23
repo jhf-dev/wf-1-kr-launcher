@@ -10,6 +10,7 @@
 
 - Steam 설치 정보를 읽어 `Wind Fantasy` Steam판 경로 자동 탐지
 - 한국어판 폴더와 Steam 대만판 폴더를 GUI에서 직접 선택
+- 직전에 사용한 한국어판 폴더 자동 복원
 - 한국어판 데이터 파일을 Steam 대만판 Win10 클라이언트에 적용
 - Steam Win10판의 ANSI/CP949 텍스트 출력을 DirectDraw 프록시에서 보정
 - KR 실행파일 기준에 맞춰 기본 폰트 charset/face를 보존
@@ -32,13 +33,15 @@ WF1_KR_Steam_Patch_GUI.exe
 ## 사용 방법
 
 1. `WF1_KR_Steam_Patch_GUI.exe`를 실행합니다.
-2. `한국어판 폴더`는 빈 값으로 시작합니다. 사용자가 보유한 Wind Fantasy 한국어판 폴더를 직접 선택합니다.
+2. `한국어판 폴더`는 직전에 사용한 유효한 경로가 있으면 자동으로 채워집니다. 없으면 사용자가 보유한 Wind Fantasy 한국어판 폴더를 직접 선택합니다.
 3. `Steam 대만판 폴더`는 Steam 설치 정보에서 자동으로 채워집니다. 자동 탐지에 실패하면 Steam의 `Wind Fantasy` 폴더를 직접 선택합니다.
 4. `패치 적용`을 누릅니다.
 5. 패치 후 `게임 실행`을 누르면 `WindConfig.exe`를 거치지 않고 `WFantasy_win10.exe`가 직접 실행됩니다.
 6. 설정 프로그램이 필요하면 `WindConfig 실행`을 사용합니다.
 
 패치 적용 전에는 게임과 `WindConfig.exe`를 종료하세요.
+
+최근 한국어판 경로는 사용자 로컬 설정 파일에 저장됩니다. Windows에서는 기본적으로 `%LOCALAPPDATA%\Team-JHF\WF1_KR_Steam_Patch\launcher_settings.json`을 사용합니다.
 
 ## 화면 설정
 

@@ -31,7 +31,8 @@ DISPLAY_FULLSCREEN = "전체화면"
 
 
 def default_kr_root() -> str:
-    return ""
+    recent = core.last_kr_root()
+    return str(recent) if recent else ""
 
 
 def default_tw_root() -> str:
@@ -203,7 +204,10 @@ class PatchGui(tk.Tk):
             self._log(f"Steam판 폴더를 자동으로 찾았습니다: {self.tw_path.get()}")
         else:
             self._log("Steam판 폴더를 자동으로 찾지 못했습니다. Steam 대만판 폴더를 직접 선택해 주세요.")
-        self._log("한국어판 폴더는 사용자가 보유한 정식 한국어판 경로를 직접 선택해야 합니다.")
+        if self.kr_path.get():
+            self._log(f"직전에 사용한 한국어판 폴더를 불러왔습니다: {self.kr_path.get()}")
+        else:
+            self._log("한국어판 폴더는 사용자가 보유한 정식 한국어판 경로를 직접 선택해야 합니다.")
         self._log("화면 모드를 지정하지 않으면 패치 적용 시 CP949 런타임은 전체화면 통과 모드로 설치됩니다.")
 
     def _path_row(self, parent: ttk.Frame, label: str, variable: tk.StringVar, command) -> None:
@@ -314,6 +318,9 @@ class PatchGui(tk.Tk):
         selected = filedialog.askdirectory(title="한국어판 폴더 선택", initialdir=initialdir)
         if selected:
             self.kr_path.set(selected)
+            selected_path = Path(selected).expanduser()
+            if core.has_kr_source_layout(selected_path) and core.remember_kr_root(selected_path):
+                self._log(f"한국어판 폴더를 다음 실행을 위해 저장했습니다: {selected_path}")
 
     def _browse_tw(self) -> None:
         initialdir = self.tw_path.get().strip() or str(Path.home())
