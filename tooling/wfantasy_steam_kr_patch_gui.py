@@ -47,6 +47,8 @@ def make_args(
     display_mode: str | None = None,
     width: int | None = None,
     height: int | None = None,
+    left_click_lock: bool | None = None,
+    right_click_lock: bool | None = None,
     no_apply: bool = False,
 ) -> argparse.Namespace:
     return argparse.Namespace(
@@ -56,6 +58,8 @@ def make_args(
         display_mode=display_mode,
         width=width,
         height=height,
+        left_click_lock=left_click_lock,
+        right_click_lock=right_click_lock,
         no_apply=no_apply,
     )
 
@@ -102,6 +106,8 @@ class PatchGui(tk.Tk):
             value=core.resolution_label(core.default_4_3_resolution(screen_width, screen_height))
         )
         self.launch_after_apply = tk.BooleanVar(value=False)
+        self.left_click_lock = tk.BooleanVar(value=True)
+        self.right_click_lock = tk.BooleanVar(value=True)
         self.status_text = tk.StringVar(value="대기 중")
 
         self._build_ui()
@@ -138,9 +144,11 @@ class PatchGui(tk.Tk):
         options = ttk.LabelFrame(main, text="실행 옵션", padding=10)
         options.pack(fill=X, pady=(8, 10))
 
-        ttk.Label(options, text="화면 모드").pack(side=LEFT)
+        display_row = ttk.Frame(options)
+        display_row.pack(fill=X)
+        ttk.Label(display_row, text="화면 모드").pack(side=LEFT)
         display = ttk.Combobox(
-            options,
+            display_row,
             textvariable=self.display_mode,
             values=[DISPLAY_UNCHANGED, DISPLAY_WINDOWED, DISPLAY_BORDERLESS, DISPLAY_FULLSCREEN],
             state="readonly",
@@ -149,16 +157,21 @@ class PatchGui(tk.Tk):
         display.pack(side=LEFT, padx=(8, 16))
         display.bind("<<ComboboxSelected>>", lambda _event: self._sync_resolution_state())
 
-        ttk.Label(options, text="해상도").pack(side=LEFT)
+        ttk.Label(display_row, text="해상도").pack(side=LEFT)
         self.resolution_combo = ttk.Combobox(
-            options,
+            display_row,
             textvariable=self.resolution_value,
             values=[core.resolution_label(item) for item in self.resolution_presets],
             state="disabled",
             width=12,
         )
         self.resolution_combo.pack(side=LEFT, padx=(8, 16))
-        ttk.Checkbutton(options, text="적용 후 게임 실행", variable=self.launch_after_apply).pack(side=LEFT)
+
+        input_row = ttk.Frame(options)
+        input_row.pack(fill=X, pady=(8, 0))
+        ttk.Checkbutton(input_row, text="적용 후 게임 실행", variable=self.launch_after_apply).pack(side=LEFT)
+        ttk.Checkbutton(input_row, text="좌클릭 잠금", variable=self.left_click_lock).pack(side=LEFT, padx=(12, 0))
+        ttk.Checkbutton(input_row, text="우클릭 잠금", variable=self.right_click_lock).pack(side=LEFT, padx=(8, 0))
 
         buttons = ttk.Frame(main)
         buttons.pack(fill=X, pady=(0, 10))
@@ -358,6 +371,8 @@ class PatchGui(tk.Tk):
             display_mode=self._display_mode_arg(),
             width=width,
             height=height,
+            left_click_lock=self.left_click_lock.get(),
+            right_click_lock=self.right_click_lock.get(),
             no_apply=no_apply,
         )
 

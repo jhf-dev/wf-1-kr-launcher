@@ -33,6 +33,7 @@ Wind Fantasy KR -> Steam TW 패치 런처
   - 창모드는 현재 모니터 해상도 이하의 4:3 프리셋만 선택 가능
   - 전체 창 모드(borderless)는 중앙 4:3 게임 영역과 좌우 pillarbox로 출력
   - 창모드/전체 창 모드에서 640x480 기준 마우스 입력/커서 좌표 보정을 적용
+  - 좌클릭 잠금/우클릭 잠금은 드래그 중 반복 클릭 신호를 줄이도록 각각 토글 가능
 
 주의:
   - 패치 적용 전 게임과 WindConfig를 종료하세요.
@@ -40,7 +41,7 @@ Wind Fantasy KR -> Steam TW 패치 런처
   - Steam 대만판 원본 파일은 _wfantasy_kr_patch_backup 폴더에 백업합니다.
   - 문제가 있으면 GUI의 TW 원본 복구 버튼을 사용할 수 있습니다.
   - 화면 옵션이 문제를 일으키면 TW 원본 복구로 런처가 만든 ddraw.dll/wfantasy_ddraw.ini도 제거됩니다.
-  - 보정만 끄려면 wfantasy_ddraw.ini에서 input_fix=0, audio_focus_fix=0, inactive_window_spoof=0, text_cp949=0으로 바꿀 수 있습니다.
+  - 보정만 끄려면 wfantasy_ddraw.ini에서 input_fix=0, left_click_lock=0, right_click_lock=0, audio_focus_fix=0, inactive_window_spoof=0, text_cp949=0으로 바꿀 수 있습니다.
   - Windows 보안 또는 백신이 런처 실행을 막으면 패치 적용 중에만 차단을 해제하고, 적용 후 원래 설정으로 되돌리세요.
 
 권리/라이선스 고지:

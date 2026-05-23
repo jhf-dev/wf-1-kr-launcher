@@ -73,7 +73,10 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual((self.tw / "stage").read_bytes(), (self.kr / "STAGE").read_bytes())
         self.assertTrue((self.tw / launcher.BACKUP_DIR_NAME / "stage").exists())
         self.assertEqual((launcher.ddraw_payload_path()).read_bytes(), (self.tw / "ddraw.dll").read_bytes())
-        self.assertIn("text_cp949=1", (self.tw / "wfantasy_ddraw.ini").read_text(encoding="ascii"))
+        ddraw_config = (self.tw / "wfantasy_ddraw.ini").read_text(encoding="ascii")
+        self.assertIn("left_click_lock=1", ddraw_config)
+        self.assertIn("right_click_lock=1", ddraw_config)
+        self.assertIn("text_cp949=1", ddraw_config)
 
         launcher.restore_patch(args)
         self.assertNotEqual((self.tw / "stage").read_bytes(), (self.kr / "STAGE").read_bytes())
@@ -88,9 +91,52 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("[wfantasy_ddraw]", rendered)
         self.assertIn("width=1280", rendered)
         self.assertIn("height=960", rendered)
+        self.assertIn("left_click_lock=1", rendered)
+        self.assertIn("right_click_lock=1", rendered)
         self.assertIn("text_cp949=1", rendered)
         self.assertIn("font_charset=preserve", rendered)
         self.assertIn("font_face=", rendered)
+
+    def test_click_lock_runtime_update_preserves_existing_display_mode(self) -> None:
+        (self.tw / "wfantasy_ddraw.ini").write_text(
+            "\n".join(
+                [
+                    "[wfantasy_ddraw]",
+                    "mode=windowed",
+                    "width=1280",
+                    "height=960",
+                    "debug=0",
+                    "input_fix=1",
+                    "left_click_lock=1",
+                    "right_click_lock=1",
+                    "audio_focus_fix=1",
+                    "inactive_window_spoof=1",
+                    "text_cp949=1",
+                    "font_charset=preserve",
+                    "font_face=",
+                    "",
+                ]
+            ),
+            encoding="ascii",
+        )
+
+        report = launcher.install_directdraw_runtime(
+            self.tw,
+            None,
+            None,
+            None,
+            False,
+            True,
+            dry_run=True,
+            install_when_unspecified=False,
+        )
+
+        self.assertNotIn("skipped", report)
+        self.assertEqual("windowed", report["config"]["mode"])
+        self.assertEqual(1280, report["config"]["width"])
+        self.assertEqual(960, report["config"]["height"])
+        self.assertEqual(0, report["config"]["left_click_lock"])
+        self.assertEqual(1, report["config"]["right_click_lock"])
 
     def test_reapply_replaces_launcher_created_runtime_without_promoting_to_backup(self) -> None:
         before_data = b"launcher-created-runtime-v1"
@@ -134,14 +180,18 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("runtime_force_hangul_font_charset", source)
         self.assertNotIn('effective_face = "Gulim"', source)
 
-    def test_directdraw_proxy_suppresses_right_button_drag_repeats(self) -> None:
+    def test_directdraw_proxy_suppresses_configured_button_drag_repeats(self) -> None:
         source = (Path(__file__).resolve().parents[1] / "tooling" / "runtime" / "ddraw_proxy.cpp").read_text(
             encoding="utf-8"
         )
 
         self.assertIn("client_mouse_wparam_to_logical", source)
+        self.assertIn("left_click_lock", source)
+        self.assertIn("right_click_lock", source)
         self.assertIn("msg == WM_MOUSEMOVE", source)
-        self.assertIn("wparam & ~MK_RBUTTON", source)
+        self.assertIn("MK_LBUTTON", source)
+        self.assertIn("MK_RBUTTON", source)
+        self.assertIn("wparam & ~locked_buttons", source)
         self.assertIn("forward_wparam", source)
 
 

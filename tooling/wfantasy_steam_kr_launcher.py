@@ -435,17 +435,24 @@ def normalize_display_config(
     display_mode: str | None,
     width: int | None,
     height: int | None,
+    left_click_lock: bool | None = None,
+    right_click_lock: bool | None = None,
+    base_config: dict[str, str] | None = None,
 ) -> dict[str, int | str]:
     if display_mode is None:
         if width is not None or height is not None:
             raise SystemExit("--width/--height require --display-mode")
-        display_mode = "fullscreen"
+        display_mode = base_config.get("mode", "fullscreen") if base_config else "fullscreen"
     if display_mode not in {"fullscreen", "windowed", "borderless"}:
         raise SystemExit(f"unsupported display mode: {display_mode}")
 
     if display_mode == "windowed":
         if width is None and height is None:
-            width, height = default_4_3_resolution()
+            if base_config:
+                width = int(base_config.get("width", "0") or "0")
+                height = int(base_config.get("height", "0") or "0")
+            if not width or not height:
+                width, height = default_4_3_resolution()
         elif width is None or height is None:
             raise SystemExit("windowed mode requires both --width and --height")
         if width <= 0 or height <= 0 or width * 3 != height * 4:
@@ -455,12 +462,19 @@ def normalize_display_config(
             raise SystemExit("--width/--height are only supported with --display-mode windowed")
         width, height = 640, 480
 
+    if left_click_lock is None:
+        left_click_lock = bool(int(base_config.get("left_click_lock", "1"))) if base_config else True
+    if right_click_lock is None:
+        right_click_lock = bool(int(base_config.get("right_click_lock", "1"))) if base_config else True
+
     return {
         "mode": display_mode,
         "width": width,
         "height": height,
         "debug": 0,
         "input_fix": 1,
+        "left_click_lock": int(left_click_lock),
+        "right_click_lock": int(right_click_lock),
         "audio_focus_fix": 1,
         "inactive_window_spoof": 1,
         "text_cp949": 1,
@@ -476,6 +490,8 @@ def render_ddraw_config(config: dict[str, int | str]) -> bytes:
         "height",
         "debug",
         "input_fix",
+        "left_click_lock",
+        "right_click_lock",
         "audio_focus_fix",
         "inactive_window_spoof",
         "text_cp949",
@@ -565,6 +581,8 @@ def install_directdraw_runtime(
     display_mode: str | None,
     width: int | None,
     height: int | None,
+    left_click_lock: bool | None,
+    right_click_lock: bool | None,
     dry_run: bool,
     install_when_unspecified: bool = True,
 ) -> dict[str, object]:
@@ -574,7 +592,9 @@ def install_directdraw_runtime(
             f"DirectDraw/CP949 runtime payload is missing: {payload}. "
             "Build it with tooling\\build_ddraw_proxy.py before applying the patch."
         )
-    if not install_when_unspecified and display_mode is None and width is None and height is None:
+    has_display_options = display_mode is not None or width is not None or height is not None
+    has_click_lock_options = left_click_lock is not None or right_click_lock is not None
+    if not install_when_unspecified and not has_display_options and not has_click_lock_options:
         return {
             "changed": False,
             "supported": True,
@@ -586,7 +606,8 @@ def install_directdraw_runtime(
             "reason": "display runtime unchanged",
         }
 
-    config = normalize_display_config(display_mode, width, height)
+    base_config = read_ddraw_config(target_path(tw_root, "wfantasy_ddraw.ini")) if not install_when_unspecified else None
+    config = normalize_display_config(display_mode, width, height, left_click_lock, right_click_lock, base_config)
     dll_data = payload.read_bytes()
     config_data = render_ddraw_config(config)
     previous_state = read_state(tw_root)
@@ -699,6 +720,8 @@ def apply_patch(args: argparse.Namespace) -> dict[str, object]:
         getattr(args, "display_mode", None),
         getattr(args, "width", None),
         getattr(args, "height", None),
+        getattr(args, "left_click_lock", None),
+        getattr(args, "right_click_lock", None),
         dry_run=args.dry_run,
     )
     report = {
@@ -818,6 +841,8 @@ def launch_executable(args: argparse.Namespace, executable_name: str, action: st
             getattr(args, "display_mode", None),
             getattr(args, "width", None),
             getattr(args, "height", None),
+            getattr(args, "left_click_lock", None),
+            getattr(args, "right_click_lock", None),
             dry_run=args.dry_run,
             install_when_unspecified=False,
         )
@@ -869,6 +894,13 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--width", type=int, help="windowed 4:3 width")
     parser.add_argument("--height", type=int, help="windowed 4:3 height")
+    left_click = parser.add_mutually_exclusive_group()
+    left_click.add_argument("--left-click-lock", dest="left_click_lock", action="store_true")
+    left_click.add_argument("--no-left-click-lock", dest="left_click_lock", action="store_false")
+    right_click = parser.add_mutually_exclusive_group()
+    right_click.add_argument("--right-click-lock", dest="right_click_lock", action="store_true")
+    right_click.add_argument("--no-right-click-lock", dest="right_click_lock", action="store_false")
+    parser.set_defaults(left_click_lock=None, right_click_lock=None)
     parser.add_argument("--dry-run", action="store_true")
 
 

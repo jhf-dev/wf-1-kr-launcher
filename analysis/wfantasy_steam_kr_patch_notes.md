@@ -564,29 +564,34 @@ Verification after packaging:
 The real Steam folder remains patched with the package payload so the user can
 continue manual play testing.
 
-## Right-Click Drag Input Tweak
+## Click Drag Input Tweak
 
 Reported on 2026-05-23:
 
 - Holding right click and dragging in windowed/scaled mode repeatedly toggled
   the in-game menu.
+- Left-click drag can hit the same family of repeated-input behavior, likely
+  because the original game polls held-button state from movement messages.
 
 Root-cause hypothesis:
 
-- Windows attaches `MK_RBUTTON` to every `WM_MOUSEMOVE` while the right button
-  is held.
+- Windows attaches `MK_LBUTTON`/`MK_RBUTTON` to every `WM_MOUSEMOVE` while the
+  matching button is held.
 - The proxy already rewrites mouse move coordinates for scaled window modes and
   previously forwarded `wParam` unchanged.
-- If the game treats `MK_RBUTTON` on mouse move as another right-click command,
-  dragging becomes repeated menu input.
+- If the game treats held-button state on mouse move as another click command,
+  dragging becomes repeated menu input on modern fast systems.
 
 Fix:
 
-- Keep `WM_RBUTTONDOWN` and `WM_RBUTTONUP` unchanged.
-- For scaled-mode `WM_MOUSEMOVE`, clear only the `MK_RBUTTON` state bit before
-  forwarding to the original game WndProc.
-- This keeps right-click as an edge event while avoiding repeated menu toggles
-  during right-button drag.
+- Keep `WM_LBUTTONDOWN`/`WM_LBUTTONUP` and `WM_RBUTTONDOWN`/`WM_RBUTTONUP`
+  unchanged.
+- For scaled-mode `WM_MOUSEMOVE`, clear only the configured held-button state
+  bits before forwarding to the original game WndProc.
+- `left_click_lock` and `right_click_lock` are independent INI/launcher options
+  and default to enabled.
+- This keeps clicks as edge events while avoiding repeated menu/window toggles
+  during button drag.
 
 ## Next Safe Step
 

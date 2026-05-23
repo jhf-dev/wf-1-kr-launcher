@@ -93,6 +93,24 @@ class LauncherGuiDefaultsTest(unittest.TestCase):
 
         self.assertEqual((None, None), app._resolution_args())
 
+    def test_gui_passes_click_lock_toggles_to_core_arguments(self) -> None:
+        app = gui.PatchGui.__new__(gui.PatchGui)
+        app.kr_path = mock.Mock()
+        app.kr_path.get.return_value = r"C:\KR"
+        app.tw_path = mock.Mock()
+        app.tw_path.get.return_value = r"C:\TW"
+        app.display_mode = mock.Mock()
+        app.display_mode.get.return_value = gui.DISPLAY_UNCHANGED
+        app.left_click_lock = mock.Mock()
+        app.left_click_lock.get.return_value = True
+        app.right_click_lock = mock.Mock()
+        app.right_click_lock.get.return_value = False
+
+        args = app._args()
+
+        self.assertTrue(args.left_click_lock)
+        self.assertFalse(args.right_click_lock)
+
 
 if __name__ == "__main__":
     unittest.main()

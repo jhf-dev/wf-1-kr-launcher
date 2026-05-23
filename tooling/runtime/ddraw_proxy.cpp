@@ -13,6 +13,8 @@ struct RuntimeConfig {
     LONG height;
     BOOL debug;
     BOOL input_fix;
+    BOOL left_click_lock;
+    BOOL right_click_lock;
     BOOL audio_focus_fix;
     BOOL inactive_window_spoof;
     BOOL text_cp949;
@@ -130,6 +132,8 @@ static RuntimeConfig load_config() {
     config.height = 480;
     config.debug = FALSE;
     config.input_fix = TRUE;
+    config.left_click_lock = TRUE;
+    config.right_click_lock = TRUE;
     config.audio_focus_fix = TRUE;
     config.inactive_window_spoof = TRUE;
     config.text_cp949 = TRUE;
@@ -146,6 +150,8 @@ static RuntimeConfig load_config() {
     config.height = GetPrivateProfileIntA("wfantasy_ddraw", "height", config.height, ini);
     config.debug = GetPrivateProfileIntA("wfantasy_ddraw", "debug", 0, ini) != 0;
     config.input_fix = GetPrivateProfileIntA("wfantasy_ddraw", "input_fix", 1, ini) != 0;
+    config.left_click_lock = GetPrivateProfileIntA("wfantasy_ddraw", "left_click_lock", 1, ini) != 0;
+    config.right_click_lock = GetPrivateProfileIntA("wfantasy_ddraw", "right_click_lock", 1, ini) != 0;
     config.audio_focus_fix = GetPrivateProfileIntA("wfantasy_ddraw", "audio_focus_fix", 1, ini) != 0;
     config.inactive_window_spoof = GetPrivateProfileIntA("wfantasy_ddraw", "inactive_window_spoof", 1, ini) != 0;
     config.text_cp949 = GetPrivateProfileIntA("wfantasy_ddraw", "text_cp949", 1, ini) != 0;
@@ -377,7 +383,14 @@ static WPARAM client_mouse_wparam_to_logical(UINT msg, WPARAM wparam) {
         return wparam;
     }
     if (msg == WM_MOUSEMOVE) {
-        return wparam & ~MK_RBUTTON;
+        WPARAM locked_buttons = 0;
+        if (g_config.left_click_lock) {
+            locked_buttons |= MK_LBUTTON;
+        }
+        if (g_config.right_click_lock) {
+            locked_buttons |= MK_RBUTTON;
+        }
+        return wparam & ~locked_buttons;
     }
     return wparam;
 }
